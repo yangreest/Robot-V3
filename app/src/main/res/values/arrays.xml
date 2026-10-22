@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 对侧串号选项（对应 HTML #fOppSide） -->
+    <string-array name="opp_side_options">
+        <item>右串</item>
+        <item>左串</item>
+        <item>无（单串布置）</item>
+    </string-array>
+
+    <!-- 电压等级选项（对应 HTML 电压等级 select） -->
+    <string-array name="voltage_options">
+        <item>AC 500kV</item>
+        <item>AC 750kV</item>
+        <item>AC 1000kV</item>
+        <item>DC ±800kV</item>
+        <item>DC ±1100kV</item>
+    </string-array>
+</resources>

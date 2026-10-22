@@ -1,0 +1,390 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 抽屉页3：系统信息（对应 HTML #pSys，.kv 列表） -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:scrollbars="none">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="18dp"
+        android:paddingTop="18dp"
+        android:paddingEnd="18dp"
+        android:paddingBottom="30dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="14dp"
+            android:text="系统信息"
+            android:textColor="@color/white"
+            android:textSize="16sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="9dp"
+            android:paddingBottom="9dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="设备名称"
+                android:textColor="@color/dt_txt2"
+                android:textSize="13sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="立尔达智检 瓷绝缘子零值检测机器人"
+                android:textColor="#DFE9E2"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <View style="@style/SysKvDivider" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="9dp"
+            android:paddingBottom="9dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="出厂编号"
+                android:textColor="@color/dt_txt2"
+                android:textSize="13sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="LRD2026-0917-003"
+                android:textColor="#DFE9E2"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <View style="@style/SysKvDivider" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="9dp"
+            android:paddingBottom="9dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="主控固件"
+                android:textColor="@color/dt_txt2"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/sysMainFw"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="V3.1.0（2026-09-10）"
+                android:textColor="#DFE9E2"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <View style="@style/SysKvDivider" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="9dp"
+            android:paddingBottom="9dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="检测模块固件"
+                android:textColor="@color/dt_txt2"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/sysDetFw"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="V2.4.2"
+                android:textColor="#DFE9E2"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <View style="@style/SysKvDivider" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="9dp"
+            android:paddingBottom="9dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="上位机 App"
+                android:textColor="@color/dt_txt2"
+                android:textSize="13sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="V3.1.0（Android 10.1″）"
+                android:textColor="#DFE9E2"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <View style="@style/SysKvDivider" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="9dp"
+            android:paddingBottom="9dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="本地存储"
+                android:textColor="@color/dt_txt2"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/sysStorage"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="23.6 / 64 GB"
+                android:textColor="#DFE9E2"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <View style="@style/SysKvDivider" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="9dp"
+            android:paddingBottom="9dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="电池健康"
+                android:textColor="@color/dt_txt2"
+                android:textSize="13sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="96%（循环 43 次）"
+                android:textColor="#DFE9E2"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <View style="@style/SysKvDivider" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="9dp"
+            android:paddingBottom="9dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="链路状态"
+                android:textColor="@color/dt_txt2"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/sysLink"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="图传 1080p / 数传 心跳正常"
+                android:textColor="#DFE9E2"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <View style="@style/SysKvDivider" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="9dp"
+            android:paddingBottom="9dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="机器人 IP"
+                android:textColor="@color/dt_txt2"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/sysRbtIp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="192.168.1.10"
+                android:textColor="#DFE9E2"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <View style="@style/SysKvDivider" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="9dp"
+            android:paddingBottom="9dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="摄像头 IP"
+                android:textColor="@color/dt_txt2"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/sysCamIp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="192.168.144.108"
+                android:textColor="#DFE9E2"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <View style="@style/SysKvDivider" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="9dp"
+            android:paddingBottom="9dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="电机行走速度"
+                android:textColor="@color/dt_txt2"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/sysMotion"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="80mm/s"
+                android:textColor="#DFE9E2"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <View style="@style/SysKvDivider" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="9dp"
+            android:paddingBottom="9dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="遥控器型号"
+                android:textColor="@color/dt_txt2"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/sysRcType"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="—"
+                android:textColor="#DFE9E2"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <View style="@style/SysKvDivider" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="9dp"
+            android:paddingBottom="9dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="OTA 升级"
+                android:textColor="@color/dt_txt2"
+                android:textSize="13sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="已是最新版本"
+                android:textColor="@color/dt_green"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/btnCheckUpdate"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@drawable/bg_btn_act_ghost"
+                android:gravity="center"
+                android:paddingTop="11dp"
+                android:paddingBottom="11dp"
+                android:text="检查更新"
+                android:textColor="@color/dt_blue"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/btnSdkDebug"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_btn_act_ghost"
+                android:gravity="center"
+                android:paddingTop="11dp"
+                android:paddingBottom="11dp"
+                android:text="SDK 调试"
+                android:textColor="@color/dt_blue"
+                android:textSize="14sp" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

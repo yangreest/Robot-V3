@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 顶部状态栏渐变背景（对应 .topbar） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <gradient
+        android:angle="270"
+        android:startColor="#C7000000"
+        android:centerColor="#61000000"
+        android:endColor="#00000000"
+        android:centerY="0.8" />
+</shape>

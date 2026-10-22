@@ -1,0 +1,520 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 抽屉页2：参数配置（对应 HTML #pParam） -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:scrollbars="none">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="18dp"
+        android:paddingTop="18dp"
+        android:paddingEnd="18dp"
+        android:paddingBottom="30dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="14dp"
+            android:text="参数配置"
+            android:textColor="@color/white"
+            android:textSize="16sp" />
+
+        <!-- 冲击电压档位 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="6dp"
+            android:text="冲击电压档位（DL/T 2453-2021，≥50kV 起调）"
+            android:textColor="@color/dt_txt2"
+            android:textSize="12sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="14dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <SeekBar
+                android:id="@+id/fKv"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:max="10"
+                android:progress="0"
+                android:progressTint="@color/dt_green"
+                android:thumbTint="@color/dt_green" />
+
+            <TextView
+                android:id="@+id/fKvV"
+                android:layout_width="70dp"
+                android:layout_height="wrap_content"
+                android:gravity="end"
+                android:text="50kV"
+                android:textColor="@color/dt_green"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <!-- 劣化判定阈值 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="6dp"
+            android:text="劣化判定阈值（500kV 及以上）"
+            android:textColor="@color/dt_txt2"
+            android:textSize="12sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="14dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <SeekBar
+                android:id="@+id/fTh"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:max="18"
+                android:progress="8"
+                android:progressTint="@color/dt_green"
+                android:thumbTint="@color/dt_green" />
+
+            <TextView
+                android:id="@+id/fThV"
+                android:layout_width="70dp"
+                android:layout_height="wrap_content"
+                android:gravity="end"
+                android:text="500MΩ"
+                android:textColor="@color/dt_green"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <!-- 报警片自动复测次数 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="6dp"
+            android:text="报警片自动复测次数"
+            android:textColor="@color/dt_txt2"
+            android:textSize="12sp" />
+
+        <LinearLayout
+            android:id="@+id/segRetest"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="14dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@drawable/bg_seg_opt_green"
+                android:gravity="center"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp"
+                android:text="1 次"
+                android:textColor="@color/dt_txt2"
+                android:textSize="13sp" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_seg_opt_green"
+                android:gravity="center"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp"
+                android:text="2 次"
+                android:textColor="@color/dt_txt2"
+                android:textSize="13sp" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_seg_opt_green"
+                android:gravity="center"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp"
+                android:text="3 次"
+                android:textColor="@color/dt_txt2"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <!-- 图传码率 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="6dp"
+            android:text="图传码率"
+            android:textColor="@color/dt_txt2"
+            android:textSize="12sp" />
+
+        <LinearLayout
+            android:id="@+id/segBitrate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="4dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@drawable/bg_seg_opt_green"
+                android:gravity="center"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp"
+                android:text="低（保链路）"
+                android:textColor="@color/dt_txt2"
+                android:textSize="12sp" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_seg_opt_green"
+                android:gravity="center"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp"
+                android:text="中"
+                android:textColor="@color/dt_txt2"
+                android:textSize="12sp" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_seg_opt_green"
+                android:gravity="center"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp"
+                android:text="高（画质优先）"
+                android:textColor="@color/dt_txt2"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <!-- 运动控制（对应 .sub-title） -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="18dp"
+            android:background="#24FFFFFF" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="10dp"
+            android:text="运动控制"
+            android:textColor="@color/dt_green"
+            android:textSize="13sp" />
+
+        <!-- 电机行走速度 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="6dp"
+            android:text="电机行走速度"
+            android:textColor="@color/dt_txt2"
+            android:textSize="12sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="14dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <SeekBar
+                android:id="@+id/fMotor"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:max="36"
+                android:progress="12"
+                android:progressTint="@color/dt_green"
+                android:thumbTint="@color/dt_green" />
+
+            <TextView
+                android:id="@+id/fMotorV"
+                android:layout_width="70dp"
+                android:layout_height="wrap_content"
+                android:gravity="end"
+                android:text="80 mm/s"
+                android:textColor="@color/dt_green"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <!-- 探针伸出速度 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="6dp"
+            android:text="探针伸出速度"
+            android:textColor="@color/dt_txt2"
+            android:textSize="12sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="14dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <SeekBar
+                android:id="@+id/fExt"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:max="75"
+                android:progress="30"
+                android:progressTint="@color/dt_green"
+                android:thumbTint="@color/dt_green" />
+
+            <TextView
+                android:id="@+id/fExtV"
+                android:layout_width="70dp"
+                android:layout_height="wrap_content"
+                android:gravity="end"
+                android:text="35 mm/s"
+                android:textColor="@color/dt_green"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <!-- 探针复位速度 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="6dp"
+            android:text="探针复位速度"
+            android:textColor="@color/dt_txt2"
+            android:textSize="12sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="14dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <SeekBar
+                android:id="@+id/fRet"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:max="95"
+                android:progress="45"
+                android:progressTint="@color/dt_green"
+                android:thumbTint="@color/dt_green" />
+
+            <TextView
+                android:id="@+id/fRetV"
+                android:layout_width="70dp"
+                android:layout_height="wrap_content"
+                android:gravity="end"
+                android:text="50 mm/s"
+                android:textColor="@color/dt_green"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <!-- 通信与固件升级 -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="18dp"
+            android:background="#24FFFFFF" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="10dp"
+            android:text="通信与固件升级"
+            android:textColor="@color/dt_green"
+            android:textSize="13sp" />
+
+        <!-- 机器人 IP -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="6dp"
+            android:text="机器人 IP 地址"
+            android:textColor="@color/dt_txt2"
+            android:textSize="12sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="14dp"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/fRbtIp"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@drawable/bg_field_input"
+                android:importantForAutofill="no"
+                android:inputType="text"
+                android:paddingStart="12dp"
+                android:paddingTop="9dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="9dp"
+                android:text="192.168.1.10"
+                android:textColor="@color/white"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/btnApplyRbtIp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/bg_btn_sm"
+                android:gravity="center"
+                android:paddingStart="14dp"
+                android:paddingTop="9dp"
+                android:paddingEnd="14dp"
+                android:paddingBottom="9dp"
+                android:text="应用"
+                android:textColor="@color/dt_blue"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <!-- 摄像头 IP -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="6dp"
+            android:text="摄像头 IP 地址"
+            android:textColor="@color/dt_txt2"
+            android:textSize="12sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="14dp"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/fCamIp"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@drawable/bg_field_input"
+                android:importantForAutofill="no"
+                android:inputType="text"
+                android:paddingStart="12dp"
+                android:paddingTop="9dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="9dp"
+                android:text="192.168.144.108"
+                android:textColor="@color/white"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/btnApplyCamIp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/bg_btn_sm"
+                android:gravity="center"
+                android:paddingStart="14dp"
+                android:paddingTop="9dp"
+                android:paddingEnd="14dp"
+                android:paddingBottom="9dp"
+                android:text="应用"
+                android:textColor="@color/dt_blue"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <!-- 检测模块固件 OTA -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="6dp"
+            android:text="检测模块固件"
+            android:textColor="@color/dt_txt2"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/btnOtaDet"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_btn_ota"
+            android:gravity="center"
+            android:paddingTop="9dp"
+            android:paddingBottom="9dp"
+            android:text="检测模块升级（OTA）V2.4.2"
+            android:textColor="@color/dt_txt"
+            android:textSize="12sp" />
+
+        <ProgressBar
+            android:id="@+id/progDet"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="4dp"
+            android:layout_marginTop="7dp"
+            android:layout_marginBottom="14dp"
+            android:max="100"
+            android:progressDrawable="@drawable/progress_ota"
+            android:visibility="gone" />
+
+        <!-- 主控模块固件 OTA -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="6dp"
+            android:text="主控模块固件"
+            android:textColor="@color/dt_txt2"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/btnOtaMain"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_btn_ota"
+            android:gravity="center"
+            android:paddingTop="9dp"
+            android:paddingBottom="9dp"
+            android:text="主控模块升级（OTA）V3.1.0"
+            android:textColor="@color/dt_txt"
+            android:textSize="12sp" />
+
+        <ProgressBar
+            android:id="@+id/progMain"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="4dp"
+            android:layout_marginTop="7dp"
+            android:layout_marginBottom="14dp"
+            android:max="100"
+            android:progressDrawable="@drawable/progress_ota"
+            android:visibility="gone" />
+
+        <!-- 保存参数 -->
+        <TextView
+            android:id="@+id/btnSaveParam"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:background="@drawable/bg_btn_act_primary"
+            android:gravity="center"
+            android:paddingTop="11dp"
+            android:paddingBottom="11dp"
+            android:text="保存参数"
+            android:textColor="@color/dt_primary_dark"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+</ScrollView>

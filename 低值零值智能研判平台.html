@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>瓷绝缘子零值检测机器人 · 手持终端 UI 演示</title>
+<style>
+  :root{
+    --spw:216px;
+    --green:#3ddc84; --red:#ff3b30; --blue:#4da3ff; --amber:#ffb340;
+    --panel:rgba(10,14,12,.72); --panel2:rgba(10,14,12,.88);
+    --line:rgba(255,255,255,.14); --txt:#e8f0ea; --txt2:#9fb3a8;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+  html,body{width:100%;height:100%;overflow:hidden;background:#000;
+    font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:var(--txt)}
+  .stage{position:fixed;inset:0}
+  #videoCanvas{position:absolute;inset:0;width:100%;height:100%}
+
+  /* ===== 顶部状态区 ===== */
+  .topbar{position:absolute;top:0;left:0;right:0;height:52px;display:flex;align-items:center;
+    padding:0 10px;gap:10px;background:linear-gradient(180deg,rgba(0,0,0,.78),rgba(0,0,0,.38) 80%,transparent);
+    z-index:20}
+  .topbar::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--green)}
+  .brand{display:flex;align-items:center;gap:9px;flex:none}
+  .brand .blogo{height:26px;width:auto;display:block}
+  .brand .pname{font-size:12px;font-weight:500;letter-spacing:.4px;color:#dbe7df;white-space:nowrap;
+    padding-left:9px;border-left:1px solid rgba(255,255,255,.22)}
+  .status-badge{display:flex;align-items:center;gap:7px;padding:4px 12px;border-radius:20px;
+    border:1px solid var(--line);font-size:13px;background:rgba(0,0,0,.4)}
+  .status-badge .dot{width:8px;height:8px;border-radius:50%;background:#8a9a90}
+  .status-badge.run{border-color:rgba(61,220,132,.5);color:var(--green)}
+  .status-badge.run .dot{background:var(--green);animation:blink 1s infinite}
+  .status-badge.alarm{border-color:rgba(255,59,48,.6);color:var(--red)}
+  .status-badge.alarm .dot{background:var(--red);animation:blink .4s infinite}
+  @keyframes blink{50%{opacity:.25}}
+  .top-mid{display:flex;gap:10px;font-size:11.5px;color:var(--txt2);min-width:0;overflow:hidden;white-space:nowrap}
+  .top-mid b{color:var(--txt);font-weight:500}
+  .top-mid>div{flex:none}
+  .top-right{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:12px;flex:none}
+  .sig{display:flex;flex-direction:column;gap:1px;font-size:11px;color:var(--txt2);text-align:right;line-height:1.35}
+  .sig b{color:#cfe4d8;font-weight:500}
+  .bats{display:flex;align-items:center;gap:13px;flex:none;padding-right:11px;margin-right:1px;
+    border-right:1px solid rgba(255,255,255,.24)}
+  .bat{display:flex;align-items:center;gap:5px}
+  .bat .shell{width:13px;height:20px;border:1.6px solid #fff;border-radius:2.5px;position:relative;
+    padding:2px;display:flex;align-items:flex-end;box-sizing:border-box}
+  .bat .shell::after{content:"";position:absolute;left:50%;transform:translateX(-50%);top:-5px;
+    width:5px;height:3px;background:#fff;border-radius:1px 1px 0 0}
+  .bat .fill{width:100%;background:#fff;border-radius:1px;transition:height .6s,background .4s}
+  .bat .btxt{display:flex;flex-direction:column;justify-content:center;line-height:1.18}
+  .bat .btxt em{font-style:normal;font-size:9.5px;color:rgba(255,255,255,.9);letter-spacing:.3px}
+  .bat .btxt b{font-size:11px;color:#fff;font-weight:500;font-variant-numeric:tabular-nums}
+  .bat.low .fill{background:var(--amber)}
+  .bat.low .btxt b{color:var(--amber)}
+  .bat.crit .fill{background:var(--red)}
+  .bat.crit .btxt b{color:var(--red)}
+  .dots{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:rgba(0,0,0,.4);
+    display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .dots:active{background:rgba(255,255,255,.12)}
+  .dots svg{width:18px;height:18px;fill:#e8f0ea}
+
+  /* ===== 左侧绝缘子串区 ===== */
+  .string-panel{position:absolute;left:0;top:52px;bottom:0;width:var(--spw);z-index:15;transition:width .25s;
+    background:linear-gradient(90deg,rgba(0,0,0,.72),rgba(0,0,0,.35) 85%,transparent);
+    display:flex;flex-direction:column}
+  .tabs{display:flex;gap:6px;padding:10px 12px 4px}
+  .tab{flex:1;text-align:center;font-size:12px;padding:5px 0;border-radius:6px;border:1px solid var(--line);
+    color:var(--txt2);cursor:pointer;background:rgba(0,0,0,.35)}
+  .tab.on{background:rgba(61,220,132,.16);border-color:var(--green);color:var(--green);font-weight:500}
+  .tabs.small .tab{padding:4px 0;font-size:11px}
+  .phase-ind{display:flex;align-items:center;justify-content:flex-start;gap:8px;margin:10px 12px 4px;
+    padding:6px 10px;border-radius:8px;font-size:12px;color:var(--txt2);
+    background:rgba(61,220,132,.12);border:1px solid rgba(61,220,132,.45)}
+  .phase-ind b{font-size:14px;font-weight:600;color:var(--green)}
+  .str-meta{display:flex;justify-content:space-between;padding:6px 14px 4px;font-size:11px;color:var(--txt2)}
+  .str-meta b{color:var(--green);font-weight:500}
+  .piece-list{flex:1;overflow-y:auto;padding:4px 10px 60px;scrollbar-width:thin}
+  .piece-list.dual{display:grid;grid-template-columns:30px 1fr 1fr;gap:4px 6px;align-content:start}
+  .piece-list.dual .piece{margin-bottom:0;gap:4px;padding:5px 4px;justify-content:center}
+  .piece-list.dual .piece .ico{width:28px;height:28px}
+  .piece-list.dual .piece .val{font-size:9px;white-space:nowrap}
+  .piece-list.dual .piece .val b{font-size:11px;white-space:nowrap}
+  .ridx{display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--txt2);
+    background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.07);border-radius:6px}
+  .piece-list::-webkit-scrollbar{width:4px}
+  .piece-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:2px}
+  .piece{display:flex;align-items:center;gap:10px;padding:5px 8px;border-radius:9px;margin-bottom:4px;
+    border:1px solid transparent;cursor:pointer;transition:background .2s}
+  .piece .idx{width:32px;font-size:12px;color:var(--txt2);text-align:right}
+  .piece .ico{width:34px;height:34px;flex:none}
+  .piece .val{font-size:11px;color:var(--txt2);line-height:1.3}
+  .piece .val b{display:block;font-size:12px;font-weight:500;color:#cfe4d8}
+  .piece[data-s="1"]{background:rgba(77,163,255,.16);border-color:var(--blue);box-shadow:0 0 10px rgba(77,163,255,.35)}
+  .piece[data-s="1"] .idx{color:var(--blue)}
+  .piece[data-s="2"]{border-color:rgba(61,220,132,.55)}
+  .piece[data-s="2"] .val b{color:var(--green)}
+  .piece[data-s="3"]{background:rgba(255,59,48,.16);border-color:rgba(255,59,48,.7)}
+  .piece[data-s="3"] .val b{color:var(--red)}
+  .piece[data-s="3"] .idx{color:var(--red)}
+
+  /* ===== 右上信息卡 ===== */
+  .info-card{position:absolute;right:16px;top:120px;z-index:14;text-align:right;font-size:12px;color:var(--txt2);
+    background:rgba(0,0,0,.32);padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.08);line-height:1.8}
+  .info-card b{color:#dfe9e2;font-weight:500}
+  .cam-btn{margin-top:8px;width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.1);
+    border:1px solid var(--line);display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+  .cam-btn:active{background:rgba(255,255,255,.25)}
+  .cam-btn svg{width:17px;height:17px;fill:#e8f0ea}
+
+  /* ===== 右下：高压冲击曲线 ===== */
+  .right-col{position:absolute;right:16px;bottom:86px;width:432px;z-index:14;
+    display:flex;flex-direction:column;gap:10px}
+
+  .curve-panel{background:var(--panel);border:1px solid rgba(255,255,255,.1);
+    border-radius:12px;padding:10px 12px 8px}
+  /* 矮窗口（如浏览器窗口非全屏）下压缩右列，避免与右上信息卡重叠 */
+  @media (max-height:720px){
+    .info-card{top:56px;font-size:11px;line-height:1.6;padding:6px 10px}
+    .cam-btn{margin-top:6px;width:30px;height:30px}
+    #curveCanvas{height:96px}
+  }
+  .curve-title{display:flex;justify-content:space-between;font-size:12px;color:var(--txt2);margin-bottom:6px}
+  .curve-title b{color:var(--green);font-weight:500}
+  #curveCanvas{width:100%;height:132px;display:block}
+
+  /* ===== 底部控制区 ===== */
+  .controls{position:absolute;left:calc(var(--spw) + 20px);right:468px;bottom:14px;z-index:16;display:flex;align-items:flex-end;justify-content:center;gap:16px}
+  .ctl{display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer}
+  .ctl .btn{width:52px;height:52px;border-radius:50%;border:1.5px solid rgba(255,255,255,.35);
+    background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;transition:transform .08s}
+  .ctl .btn:active{transform:scale(.93)}
+  .ctl span{font-size:11px;color:var(--txt2)}
+  .ctl svg{width:22px;height:22px;fill:#e8f0ea}
+  .ctl.main .btn{width:64px;height:64px;border-color:var(--green);background:rgba(61,220,132,.14)}
+  .ctl.main span{color:var(--green)}
+  .ctl.manual .btn{border-color:var(--amber);background:rgba(255,179,64,.13)}
+  .ctl.manual .btn svg{fill:var(--amber)}
+  .ctl.manual span{color:var(--amber)}
+  .ctl.stop .btn{border-color:var(--red);background:rgba(255,59,48,.12)}
+  .ctl.stop span{color:var(--red)}
+  .rec-on .btn{border-color:var(--red)!important;background:var(--red)!important}
+  .rec-timer{position:absolute;right:468px;bottom:150px;z-index:15;display:none;align-items:center;gap:7px;
+    font-size:13px;color:#fff;background:rgba(0,0,0,.5);padding:5px 12px;border-radius:16px;border:1px solid rgba(255,255,255,.15)}
+  .rec-timer .rd{width:9px;height:9px;border-radius:50%;background:var(--red);animation:blink .8s infinite}
+  .rec-timer.show{display:flex}
+
+  /* ===== 报警条 ===== */
+  .alarm-bar{position:absolute;top:64px;left:50%;transform:translateX(-50%) translateY(-90px);z-index:30;
+    display:flex;align-items:center;gap:10px;padding:9px 18px;border-radius:10px;font-size:13px;
+    background:rgba(255,59,48,.92);color:#fff;box-shadow:0 4px 18px rgba(255,59,48,.4);transition:transform .3s}
+  .alarm-bar.show{transform:translateX(-50%) translateY(0)}
+  .alarm-bar svg{width:18px;height:18px;fill:#fff}
+
+  /* ===== 右侧抽屉 ===== */
+  .drawer-mask{position:absolute;inset:0;background:rgba(0,0,0,.35);z-index:40;opacity:0;pointer-events:none;transition:opacity .25s}
+  .drawer-mask.show{opacity:1;pointer-events:auto}
+  .drawer{position:absolute;top:0;right:-470px;bottom:0;width:440px;z-index:41;background:rgba(6,10,8,.94);
+    border-left:1px solid rgba(255,255,255,.12);display:flex;transition:right .3s;backdrop-filter:blur(6px)}
+  .drawer.show{right:0}
+  .drawer-tabs{width:52px;border-right:1px solid rgba(255,255,255,.1);display:flex;flex-direction:column;order:2}
+  .dtab{flex:none;padding:22px 0;text-align:center;cursor:pointer;writing-mode:vertical-rl;font-size:13px;
+    color:var(--txt2);border-left:3px solid transparent}
+  .dtab.on{color:var(--green);border-left-color:var(--green);background:rgba(61,220,132,.08)}
+  .drawer-body{flex:1;padding:18px 18px 30px;overflow-y:auto;order:1}
+  .drawer-body h3{font-size:16px;font-weight:500;margin-bottom:14px;color:#fff}
+  .env{display:flex;gap:18px;font-size:13px;background:rgba(255,255,255,.05);border-radius:10px;padding:10px 14px;margin-bottom:16px}
+  .env b{color:var(--green);font-weight:500}
+  .fld{margin-bottom:14px}
+  .fld label{display:block;font-size:12px;color:var(--txt2);margin-bottom:6px}
+  .fld input,.fld select{width:100%;background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:8px;
+    color:#fff;font-size:14px;padding:9px 12px;outline:none}
+  .fld select option{background:#111}
+  .seg{display:flex;gap:8px}
+  .seg .opt{flex:1;text-align:center;padding:8px 0;border-radius:8px;border:1px solid var(--line);font-size:13px;color:var(--txt2);cursor:pointer}
+  .seg .opt.on{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:500}
+  .seg .opt.g.on{background:var(--green);border-color:var(--green)}
+  .range-row{display:flex;align-items:center;gap:12px}
+  .range-row input[type=range]{flex:1;accent-color:var(--green)}
+  .range-row b{width:70px;text-align:right;font-size:14px;color:var(--green);font-weight:500}
+  .range-row input[type=range]:disabled{opacity:.35}
+  .f-tip{margin-top:6px;font-size:11px;color:var(--txt2);line-height:1.5}
+  .f-tip.warn{color:var(--amber)}
+  .fld.dis label,.fld.dis .range-row b{color:#7e8f86}
+  .drawer-actions{display:flex;gap:12px;margin-top:20px}
+  .btn-act{flex:1;text-align:center;padding:11px 0;border-radius:9px;font-size:14px;cursor:pointer;border:1px solid transparent}
+  .btn-act.primary{background:var(--green);color:#04140c;font-weight:600}
+  .btn-act.ghost{border-color:var(--blue);color:var(--blue);background:rgba(77,163,255,.08)}
+  .kv{display:flex;justify-content:space-between;font-size:13px;padding:9px 4px;border-bottom:1px dashed rgba(255,255,255,.08)}
+  .kv span:first-child{color:var(--txt2)}
+  .kv b{font-weight:500;color:#dfe9e2}
+  .sub-title{font-size:13px;color:var(--green);font-weight:500;margin:18px 0 10px;padding-top:12px;
+    border-top:1px dashed rgba(255,255,255,.14)}
+  .env-edit{display:flex;gap:8px}
+  .env-edit>div{flex:1;display:flex;align-items:center;gap:3px;background:rgba(255,255,255,.06);
+    border:1px solid var(--line);border-radius:8px;padding:4px 7px}
+  .env-edit span{font-size:11px;color:var(--txt2);flex:none}
+  .env-edit input{width:100%;min-width:0;background:transparent;border:none;outline:none;color:#fff;
+    font-size:13px;text-align:center}
+  .fld input[type=number]::-webkit-outer-spin-button,
+  .fld input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .env-edit i{font-style:normal;font-size:11px;color:var(--txt2);flex:none}
+  .ip-row{display:flex;gap:8px;align-items:center}
+  .ip-row input{flex:1}
+  .btn-sm{flex:none;padding:9px 14px;border-radius:8px;font-size:12px;cursor:pointer;text-align:center;
+    border:1px solid var(--blue);color:var(--blue);background:rgba(77,163,255,.08)}
+  .btn-sm:active{background:rgba(77,163,255,.22)}
+  .btn-sm.ok{border-color:var(--green);color:var(--green);background:rgba(61,220,132,.1)}
+  .btn-sm.ota{width:100%;border-color:rgba(255,255,255,.3);color:#e8f0ea;background:rgba(255,255,255,.06)}
+  .btn-sm.ota.busy{border-color:var(--amber);color:var(--amber);background:rgba(255,179,64,.1)}
+  .prog{height:4px;border-radius:2px;background:rgba(255,255,255,.1);margin-top:7px;overflow:hidden;display:none}
+  .prog.on{display:block}
+  .prog i{display:block;height:100%;width:0%;background:var(--green);border-radius:2px;transition:width .2s}
+  .page{display:none}
+  .page.on{display:block}
+
+  /* ===== 报告弹窗 ===== */
+  .modal-mask{position:absolute;inset:0;background:rgba(0,0,0,.55);z-index:50;display:none;align-items:center;justify-content:center}
+  .modal-mask.show{display:flex}
+  .modal{width:560px;max-height:82%;overflow-y:auto;background:#0c1210;border:1px solid rgba(255,255,255,.14);
+    border-radius:14px;padding:22px 26px}
+  .modal h3{font-size:17px;font-weight:600;margin-bottom:4px}
+  .modal .sub{font-size:12px;color:var(--txt2);margin-bottom:16px}
+  .rpt-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px}
+  .rpt-cell{background:rgba(255,255,255,.05);border-radius:10px;padding:12px 14px}
+  .rpt-cell .l{font-size:11px;color:var(--txt2)}
+  .rpt-cell .v{font-size:19px;font-weight:600;margin-top:4px}
+  .rpt-cell .v.g{color:var(--green)} .rpt-cell .v.r{color:var(--red)}
+  .rpt-list{font-size:13px;max-height:160px;overflow-y:auto;border:1px solid rgba(255,255,255,.08);border-radius:10px;margin-bottom:16px}
+  .rpt-list .row{display:flex;justify-content:space-between;padding:8px 14px;border-bottom:1px dashed rgba(255,255,255,.07)}
+  .rpt-list .row b{color:var(--red);font-weight:500}
+  .modal-btns{display:flex;gap:12px}
+
+  /* ===== Toast ===== */
+  .toast{position:absolute;left:50%;bottom:110px;transform:translateX(-50%) translateY(20px);opacity:0;z-index:60;
+    background:rgba(0,0,0,.85);border:1px solid rgba(255,255,255,.18);padding:9px 20px;border-radius:20px;
+    font-size:13px;transition:all .25s;pointer-events:none}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:70}
+  .flash.go{animation:flashA .35s}
+  @keyframes flashA{0%{opacity:0}25%{opacity:.85}100%{opacity:0}}
+
+  .demo-hint{position:absolute;left:calc(var(--spw) + 20px);top:64px;z-index:13;font-size:11px;color:rgba(255,255,255,.45);line-height:1.6;background:rgba(0,0,0,.35);padding:4px 10px;border-radius:8px}
+</style>
+</head>
+<body>
+<div class="stage">
+  <canvas id="videoCanvas"></canvas>
+
+  <!-- 顶部状态区 -->
+  <div class="topbar">
+    <div class="brand"><img class="blogo" alt="立尔达智检" title="立尔达智检"
+      src="data:image/png;base64,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"><span class="pname">瓷绝缘子零值检测系统</span></div>
+    <div class="status-badge" id="statusBadge"><span class="dot"></span><span id="statusText">非检测</span></div>
+    <div class="top-mid">
+      <div>线路 <b id="mLine">750kV城苏2线</b></div>
+      <div>杆塔 <b>#020</b></div>
+      <div>模式 <b id="mMode">自动</b></div>
+      <div>已测 <b id="mDone">0/60</b></div>
+      <div>劣化 <b id="mBad" style="color:var(--red)">0</b></div>
+    </div>
+    <div class="top-right">
+      <div class="sig">
+        <span>信号延迟 <b id="sigLat">11ms</b>　信号质量 <b>100%</b></span>
+        <span>信号强度 <b>-58dBm</b></span>
+      </div>
+      <div class="bats">
+        <div class="bat" id="batRBox">
+          <div class="shell"><div class="fill" id="batRFill" style="height:82%"></div></div>
+          <div class="btxt"><em>机器人</em><b id="batR">82%</b></div></div>
+        <div class="bat" id="batABox">
+          <div class="shell"><div class="fill" id="batAFill" style="height:76%"></div></div>
+          <div class="btxt"><em>安卓</em><b id="batA">76%</b></div></div>
+      </div>
+      <div class="dots" id="menuBtn" title="菜单">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- 左侧绝缘子串区 -->
+  <div class="string-panel">
+    <div class="phase-ind" id="phaseInd"><span>当前相别</span><b id="phaseName">A相</b></div>
+    <div class="tabs small" id="sideTabs">
+      <div class="tab on" data-v="左串">左串</div><div class="tab" data-v="右串">右串</div>
+    </div>
+    <div class="str-meta"><span id="strInfo">A相 · 双联 左串/右串</span><span>合格 <b id="okCnt">0</b> · 异常 <b id="badCnt" style="color:var(--red)">0</b></span></div>
+    <div class="piece-list" id="pieceList"></div>
+  </div>
+
+  <!-- 右上信息卡 -->
+  <div class="info-card">
+    环境温度 <b id="envT">20℃</b>　湿度 <b id="envH">33%RH</b>　风速 <b id="envW">3.2m/s</b><br>
+    电压档位 <b id="kvShow">50kV</b>　阈值 <b id="thShow">500MΩ</b><br>
+    探针状态 <b id="probeSt" style="color:var(--green)">复位</b>
+    <div><div class="cam-btn" id="shotBtn" title="拍照">
+      <svg viewBox="0 0 24 24"><path d="M9 3l-1.5 2H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.5L15 3H9zm3 5a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 2a3 3 0 1 0 .001 6.001A3 3 0 0 0 12 10z"/></svg>
+    </div></div>
+  </div>
+
+  <!-- 右下：高压冲击响应曲线 -->
+  <div class="right-col">
+    <div class="curve-panel">
+      <div class="curve-title"><span>高压冲击响应曲线（kV）</span></div>
+      <div class="cw"><canvas id="curveCanvas"></canvas></div>
+    </div>
+  </div>
+
+  <!-- 底部控制区 -->
+  <div class="controls">
+    <div class="ctl" id="modeBtn" title="切换检测模式">
+      <div class="btn"><svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg></div>
+      <span id="modeTxt">自动</span>
+    </div>
+    <div class="ctl main" id="startBtn">
+      <div class="btn"><svg viewBox="0 0 24 24" id="startIco"><path d="M8 5v14l11-7z"/></svg></div>
+      <span id="startTxt">开始检测</span>
+    </div>
+    <div class="ctl" id="recBtn">
+      <div class="btn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/></svg></div>
+      <span>录制</span>
+    </div>
+    <div class="ctl stop" id="estopBtn">
+      <div class="btn"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-4 9h8v2H8v-2z"/></svg></div>
+      <span>急停</span>
+    </div>
+  </div>
+  <div class="demo-hint">演示提示：双联按行推进，左侧为序号、同行左右两列同步检测；点任意片可跳转；右上角 ⋯ 打开设置抽屉（线路设置可录入环境信息、串号与串型）</div>
+
+  <div class="rec-timer" id="recTimer"><span class="rd"></span>REC <b id="recTime">00:00</b></div>
+
+  <!-- 报警条 -->
+  <div class="alarm-bar" id="alarmBar">
+    <svg viewBox="0 0 24 24"><path d="M12 2L1 21h22L12 2zm0 6l7 12H5l7-12zm-1 4v4h2v-4h-2zm0 5v2h2v-2h-2z"/></svg>
+    <span id="alarmText">发现劣化绝缘子</span>
+  </div>
+
+  <!-- 右侧抽屉 -->
+  <div class="drawer-mask" id="drawerMask"></div>
+  <div class="drawer" id="drawer">
+    <div class="drawer-tabs">
+      <div class="dtab on" data-p="pLine">线路设置</div>
+      <div class="dtab" data-p="pParam">参数配置</div>
+      <div class="dtab" data-p="pSys">系统信息</div>
+    </div>
+    <div class="drawer-body">
+      <!-- 线路设置 -->
+      <div class="page on" id="pLine">
+        <h3>线路设置</h3>
+        <div class="fld"><label>环境信息（现场实测，可录入）</label>
+          <div class="env-edit">
+            <div><span>温度</span><input id="fTemp" inputmode="decimal" value="20"><i>℃</i></div>
+            <div><span>湿度</span><input id="fHumi" inputmode="decimal" value="33"><i>%RH</i></div>
+            <div><span>风速</span><input id="fWind" inputmode="decimal" value="3.2"><i>m/s</i></div>
+          </div></div>
+        <div class="fld"><label>线路名称</label><input id="fLine" value="750kV城苏2线"></div>
+        <div class="fld"><label>塔杆序号</label><input value="20"></div>
+        <div class="fld"><label>安装位置</label>
+          <div class="seg"><div class="opt on">大号侧</div><div class="opt">小号侧</div></div></div>
+        <div class="fld"><label>安装相别</label>
+          <div class="seg" id="fPhase"><div class="opt on">A相</div><div class="opt">B相</div><div class="opt">C相</div></div></div>
+        <div class="fld"><label>所在串号</label>
+          <div class="seg" id="fSide"><div class="opt g on">左串</div><div class="opt g">右串</div></div></div>
+        <div class="fld"><label>对侧串号</label>
+          <select id="fOppSide"><option value="右串">右串</option><option value="左串">左串</option><option value="无">无（单串布置）</option></select></div>
+        <div class="fld"><label>串型（双联时左右联同时检测）</label>
+          <div class="seg" id="fLink"><div class="opt g on">双联</div><div class="opt">单联</div></div></div>
+        <div class="fld"><label>电压等级</label>
+          <select><option>AC 500kV</option><option selected>AC 750kV</option><option>AC 1000kV</option><option>DC ±800kV</option><option>DC ±1100kV</option></select></div>
+        <div class="fld"><label>每联片数（最大支持 200 片）</label>
+          <div class="range-row"><input type="range" id="fCount" min="10" max="200" value="60" step="1"><b id="fCountV">60 片</b></div></div>
+        <div class="drawer-actions">
+          <div class="btn-act primary" id="saveLine">保存设置</div>
+          <div class="btn-act ghost" id="openRpt">查看报告</div>
+        </div>
+      </div>
+      <!-- 参数配置 -->
+      <div class="page" id="pParam">
+        <h3>参数配置</h3>
+        <div class="fld"><label>冲击电压档位（DL/T 2453-2021，≥50kV 起调）</label>
+          <div class="range-row"><input type="range" id="fKv" min="50" max="60" value="50" step="1"><b id="fKvV">50kV</b></div></div>
+        <div class="fld"><label>劣化判定阈值（500kV 及以上）</label>
+          <div class="range-row"><input type="range" id="fTh" min="100" max="1000" value="500" step="50"><b id="fThV">500MΩ</b></div></div>
+        <div class="fld"><label>报警片自动复测次数</label>
+          <div class="seg"><div class="opt g">1 次</div><div class="opt g on">2 次</div><div class="opt g">3 次</div></div></div>
+        <div class="fld"><label>图传码率</label>
+          <div class="seg"><div class="opt">低（保链路）</div><div class="opt g on">中</div><div class="opt">高（画质优先）</div></div></div>
+
+        <div class="sub-title">运动控制</div>
+        <div class="fld"><label>电机行走速度</label>
+          <div class="range-row"><input type="range" id="fMotor" min="20" max="200" value="80" step="5"><b id="fMotorV">80 mm/s</b></div></div>
+        <div class="fld"><label>探针伸出速度</label>
+          <div class="range-row"><input type="range" id="fExt" min="5" max="80" value="35" step="1"><b id="fExtV">35 mm/s</b></div></div>
+        <div class="fld"><label>探针复位速度</label>
+          <div class="range-row"><input type="range" id="fRet" min="5" max="100" value="50" step="1"><b id="fRetV">50 mm/s</b></div></div>
+
+        <div class="sub-title">通信与固件升级</div>
+        <div class="fld"><label>机器人 IP 地址</label>
+          <div class="ip-row"><input id="fRbtIp" value="192.168.1.10"><div class="btn-sm" id="applyRbtIp">应用</div></div></div>
+        <div class="fld"><label>摄像头 IP 地址</label>
+          <div class="ip-row"><input id="fCamIp" value="192.168.1.11"><div class="btn-sm" id="applyCamIp">应用</div></div></div>
+        <div class="fld"><label>检测模块固件 <span id="detFwV">V2.4.2</span></label>
+          <div class="btn-sm ota" id="otaDet">检测模块升级（OTA）</div>
+          <div class="prog" id="progDet"><i></i></div></div>
+        <div class="fld"><label>主控模块固件 <span id="mainFwV">V3.1.0</span></label>
+          <div class="btn-sm ota" id="otaMain">主控模块升级（OTA）</div>
+          <div class="prog" id="progMain"><i></i></div></div>
+
+        <div class="drawer-actions"><div class="btn-act primary" id="saveParam">保存参数</div></div>
+      </div>
+      <!-- 系统信息 -->
+      <div class="page" id="pSys">
+        <h3>系统信息</h3>
+        <div class="kv"><span>设备名称</span><b>立尔达智检 瓷绝缘子零值检测机器人</b></div>
+        <div class="kv"><span>出厂编号</span><b>LRD2026-0917-003</b></div>
+        <div class="kv"><span>主控固件</span><b id="sysMainFw">V3.1.0（2026-09-10）</b></div>
+        <div class="kv"><span>检测模块固件</span><b id="sysDetFw">V2.4.2</b></div>
+        <div class="kv"><span>上位机 App</span><b>V3.1.0（Android 10.1″）</b></div>
+        <div class="kv"><span>本地存储</span><b>23.6 / 64 GB</b></div>
+        <div class="kv"><span>电池健康</span><b>96%（循环 43 次）</b></div>
+        <div class="kv"><span>链路状态</span><b>图传 1080p / 数传 心跳正常</b></div>
+        <div class="kv"><span>机器人 IP</span><b id="sysRbtIp">192.168.1.10</b></div>
+        <div class="kv"><span>摄像头 IP</span><b id="sysCamIp">192.168.1.11</b></div>
+        <div class="kv"><span>电机行走速度</span><b id="sysMotion">80mm/s</b></div>
+        <div class="kv"><span>OTA 升级</span><b style="color:var(--green)">已是最新版本</b></div>
+        <div class="drawer-actions"><div class="btn-act ghost" id="otaBtn">检查更新</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 报告弹窗 -->
+  <div class="modal-mask" id="rptMask">
+    <div class="modal">
+      <h3>检测报告（预览）</h3>
+      <div class="sub" id="rptSub">750kV城苏2线 · 杆塔 #020 · A相左串 · 2026-09-17 09:24</div>
+      <div class="rpt-grid">
+        <div class="rpt-cell"><div class="l">检测片数</div><div class="v" id="rTotal">0</div></div>
+        <div class="rpt-cell"><div class="l">合格</div><div class="v g" id="rOk">0</div></div>
+        <div class="rpt-cell"><div class="l">劣化 / 零值</div><div class="v r" id="rBad">0</div></div>
+        <div class="rpt-cell"><div class="l">线路零值率</div><div class="v r" id="rRate">0.0%</div></div>
+        <div class="rpt-cell"><div class="l">判据</div><div class="v" style="font-size:14px">高压脉冲 DL/T 626-2024</div></div>
+        <div class="rpt-cell"><div class="l">阈值</div><div class="v" style="font-size:14px" id="rTh">500MΩ</div></div>
+      </div>
+      <div class="l" style="font-size:12px;color:var(--txt2);margin-bottom:6px">异常片明细</div>
+      <div class="rpt-list" id="rptList"><div class="row"><span>暂无异常记录</span></div></div>
+      <div class="modal-btns">
+        <div class="btn-act ghost" id="expWord">导出 Word</div>
+        <div class="btn-act ghost" id="expPdf">导出 PDF</div>
+        <div class="btn-act primary" id="closeRpt">关闭</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <div class="flash" id="flash"></div>
+</div>
+
+<script>
+/* ============ 数据模型 ============ */
+const N_MAX = 200;
+let cfg = {phase:'A相', side:'左串', oppSide:'右串', count:60, kv:50, th:500, mode:'auto', linkType:'双联',
+  motor:80, ext:35, ret:50, rbtIp:'192.168.1.10', camIp:'192.168.1.11',
+  temp:20, humi:33, wind:3.2};
+let fw = {det:[2,4,2], main:[3,1,0]};
+const fwStr = a => 'V' + a.join('.');
+let pieces = [];   // {s:0未测/1检测中/2合格/3异常, v:阻值}
+let cur = 0, timer = null, detT = null, manT = null, running = false, badList = [];
+const $ = id => document.getElementById(id);
+
+function resetPieces(){
+  pieces = [];
+  if(cfg.linkType==='双联'){
+    for(let i=1;i<=cfg.count;i++){
+      pieces.push({s:0,v:null,label:'左'+i,row:i});
+      pieces.push({s:0,v:null,label:'右'+i,row:i});
+    }
+  } else {
+    for(let i=1;i<=cfg.count;i++) pieces.push({s:0,v:null,label:String(i),row:i});
+  }
+  cur = 0; badList = []; updateMeta(); renderList();
+}
+
+/* ============ 左侧绝缘子串 ============ */
+const insSvg = st => {
+  const col = st==1 ? '#4da3ff' : st==2 ? '#3ddc84' : st==3 ? '#ff3b30' : '#8fa39a';
+  return `<svg class="ico" viewBox="0 0 40 40"><g fill="none" stroke="${col}" stroke-width="2">
+    <ellipse cx="20" cy="12" rx="10" ry="4"/><ellipse cx="20" cy="20" rx="10" ry="4"/>
+    <ellipse cx="20" cy="28" rx="10" ry="4"/><line x1="20" y1="4" x2="20" y2="36"/></g></svg>`;
+};
+function pieceCell(i, withIdx){
+  const p = pieces[i];
+  const d = document.createElement('div');
+  d.className='piece'; d.dataset.s = p.s; d.dataset.i = i;
+  d.innerHTML = (withIdx ? `<div class="idx">${p.label}</div>` : '') + insSvg(p.s) +
+    `<div class="val"><b>${p.s==1?'检测中…':(p.v!=null? p.v+' MΩ':'— MΩ')}</b>
+      ${p.s==2?'合格':p.s==3?'异常':p.s==1?'冲击采集中':'待检测'}</div>`;
+  d.onclick = ()=>{ if(running && cfg.mode==='auto') return;
+    pieces.forEach(q=>{ if(q.s===1) q.s=0; });
+    cur = i; pieces[i].s = 1; renderList(); scrollCur(); updateMeta();
+    if(cfg.mode==='manual') toast('已选中 '+pieceName(i)+'，点“检测当前片”执行');
+  };
+  return d;
+}
+function pieceName(i){
+  const p = pieces[i];
+  return cfg.linkType==='双联' ? ('第 '+p.row+' 片（'+p.label[0]+'列）') : ('第 '+p.row+' 片');
+}
+function renderList(){
+  const list = $('pieceList'); list.innerHTML = '';
+  const dual = cfg.linkType === '双联';
+  list.classList.toggle('dual', dual);
+  if(dual){
+    for(let i=0;i<pieces.length;i+=2){
+      const n = document.createElement('div');
+      n.className='ridx'; n.textContent = pieces[i].row;
+      list.appendChild(n);
+      list.appendChild(pieceCell(i,false));
+      if(pieces[i+1]) list.appendChild(pieceCell(i+1,false));
+    }
+  } else {
+    pieces.forEach((p,i)=> list.appendChild(pieceCell(i,true)));
+  }
+}
+function scrollCur(){
+  const el = document.querySelector(`.piece[data-i="${cur}"]`);
+  if(el) el.scrollIntoView({block:'nearest', behavior:'smooth'});
+}
+function updateMeta(){
+  const done = pieces.filter(p=>p.s===2||p.s===3).length;
+  const ok = pieces.filter(p=>p.s===2).length;
+  const bad = pieces.filter(p=>p.s===3).length;
+  $('mDone').textContent = done+'/'+pieces.length;
+  $('mBad').textContent = bad; $('okCnt').textContent = ok; $('badCnt').textContent = bad;
+  $('strInfo').textContent = cfg.linkType==='双联' ? (cfg.phase+' · 双联 '+cfg.side+'/'+cfg.oppSide) : cfg.phase;
+}
+
+/* ============ 检测状态机 ============ */
+function setStatus(t){
+  const b = $('statusBadge');
+  b.className = 'status-badge ' + (t==='run'?'run':t==='alarm'?'alarm':'');
+  $('statusText').textContent = t==='run'?'检测中':t==='alarm'?'异常报警':'非检测';
+}
+function detectOnce(){
+  if(cur >= pieces.length){ stopRun(true); return; }
+  pieces.forEach(q=>{ if(q.s===1) q.s=0; });
+  pieces[cur].s = 1; renderList(); scrollCur();
+  $('probeSt').textContent='伸出·接触'; $('probeSt').style.color='var(--amber)';
+  firePulse();                                    // 触发冲击曲线
+  detT = setTimeout(()=>{
+    const fail = Math.random() < 0.08;
+    // 实测阻值（直接读数）
+    const base = fail ? 20 + Math.random()*(cfg.th-40) : cfg.th + 60 + Math.random()*1600;
+    const v = Math.round(base);
+    pieces[cur].s = fail ? 3 : 2; pieces[cur].v = v;
+    if(fail){
+      badList.push({idx:pieceName(cur), v});
+      alarm(`发现劣化绝缘子：${pieceName(cur)}，阻值 ${v} MΩ（阈值 ${cfg.th} MΩ）`);
+    } else setStatus('run');
+    $('probeSt').textContent='复位'; $('probeSt').style.color='var(--green)';
+    cur++; renderList(); scrollCur(); updateMeta();
+  }, 800);
+}
+function startRun(){
+  if(cur >= pieces.length) resetPieces();
+  running = true; setStatus('run');
+  $('startTxt').textContent = cfg.mode==='auto' ? '停止检测' : '检测当前片';
+  $('startIco').innerHTML = cfg.mode==='auto' ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>' : '<path d="M8 5v14l11-7z"/>';
+  if(cfg.mode==='auto'){ detectOnce(); timer = setInterval(detectOnce, 1500); }
+  else detectOnce();
+}
+function stopRun(done){
+  running = false; clearInterval(timer); clearTimeout(detT); clearTimeout(manT);
+  pieces.forEach(q=>{ if(q.s===1) q.s=0; });
+  renderList(); setStatus('idle');
+  idleLabel();
+  $('startIco').innerHTML='<path d="M8 5v14l11-7z"/>';
+  $('probeSt').textContent='复位'; $('probeSt').style.color='var(--green)';
+  if(done) toast('本串检测完成，可打开 ⋯ → 线路设置 → 查看报告');
+}
+$('startBtn').onclick = ()=>{
+  if(cfg.mode==='manual') return manualOnce();       // 手动：每次测当前选中片，可连续执行
+  running ? stopRun(false) : startRun();
+};
+function manualOnce(){
+  if(running) return;                                // 单片测量进行中，忽略重复点击
+  if(cur >= pieces.length) resetPieces();
+  running = true; setStatus('run');
+  $('startTxt').textContent = '测量中…';
+  $('startIco').innerHTML = '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>';
+  detectOnce();
+  clearTimeout(manT);
+  manT = setTimeout(()=>{                            // 单片完成后自动复位，便于继续测下一片
+    running = false; setStatus('idle'); idleLabel();
+    $('startIco').innerHTML = '<path d="M8 5v14l11-7z"/>';
+  }, 900);
+}
+$('estopBtn').onclick = ()=>{ stopRun(false); toast('已急停：所有动作停止，探针复位'); };
+function idleLabel(){ $('startTxt').textContent = cfg.mode==='auto' ? '开始检测' : '检测当前片'; }
+function applyMode(){
+  const man = cfg.mode==='manual';
+  $('mMode').textContent   = man ? '手动' : '自动';
+  $('modeTxt').textContent = man ? '手动' : '自动';
+  $('modeBtn').classList.toggle('manual', man);
+  if(!running) idleLabel();
+}
+$('modeBtn').onclick = ()=>{
+  if(running) return toast('检测中不可切换模式');
+  cfg.mode = cfg.mode==='auto' ? 'manual' : 'auto';
+  applyMode();
+  toast('已切换为' + (cfg.mode==='auto'?'自动':'手动') + '模式（按钮已同步显示“' + $('modeTxt').textContent + '”）');
+};
+applyMode();
+
+/* ============ 报警条 / Toast ============ */
+let alarmT=null;
+function alarm(msg){
+  $('alarmText').textContent = msg;
+  $('alarmBar').classList.add('show'); setStatus('alarm');
+  clearTimeout(alarmT);
+  alarmT = setTimeout(()=>{ $('alarmBar').classList.remove('show'); if(running) setStatus('run'); }, 4000);
+}
+let toastT=null;
+function toast(msg){
+  const t=$('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+/* ============ 拍照 / 录制 ============ */
+$('shotBtn').onclick = ()=>{
+  const f=$('flash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
+  const d=new Date();
+  toast(`已保存图片：P_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}${String(d.getSeconds()).padStart(2,'0')}.jpg`);
+};
+let recOn=false, recSec=0, recT=null;
+$('recBtn').onclick = ()=>{
+  recOn = !recOn;
+  $('recBtn').classList.toggle('rec-on', recOn);
+  $('recTimer').classList.toggle('show', recOn);
+  if(recOn){ recSec=0; recT=setInterval(()=>{ recSec++;
+      $('recTime').textContent = String(Math.floor(recSec/60)).padStart(2,'0')+':'+String(recSec%60).padStart(2,'0'); },1000);
+    toast('开始录制检测视频');
+  } else { clearInterval(recT); toast('录制已停止，视频已保存并与片号关联'); }
+};
+
+/* ============ 视频流背景（模拟） ============ */
+const vc = $('videoCanvas'), vx = vc.getContext('2d');
+function resize(){ vc.width = innerWidth; vc.height = innerHeight; }
+addEventListener('resize', resize); resize();
+let vt = 0;
+function drawVideo(){
+  vt += 0.016;
+  const w=vc.width, h=vc.height;
+  const g = vx.createLinearGradient(0,0,w,0);
+  g.addColorStop(0,'#10161a'); g.addColorStop(.45,'#1b232a'); g.addColorStop(1,'#0c1114');
+  vx.fillStyle = g; vx.fillRect(0,0,w,h);
+  // 远处塔架结构
+  vx.strokeStyle='rgba(140,160,170,.16)'; vx.lineWidth=2;
+  for(let i=0;i<4;i++){
+    const x = w*0.28 + i*90 + Math.sin(vt*.3+i)*4;
+    vx.beginPath(); vx.moveTo(x, h*.1); vx.lineTo(x+30, h*.62); vx.stroke();
+  }
+  // 右侧缓慢移动的绝缘子串（模拟机器人行进视角）
+  const cx = w*0.66, gap = 46, off = (vt*14)%gap;
+  for(let i=-1;i<Math.ceil(h/gap)+2;i++){
+    const y = i*gap - off + 40;
+    vx.save(); vx.translate(cx,y);
+    vx.fillStyle='rgba(70,82,92,.95)';
+    vx.beginPath(); vx.ellipse(0,0,58,17,0,0,Math.PI*2); vx.fill();
+    vx.fillStyle='rgba(120,135,148,.5)';
+    vx.beginPath(); vx.ellipse(0,-5,52,12,0,0,Math.PI*2); vx.fill();
+    vx.fillStyle='rgba(40,48,55,.9)';
+    vx.beginPath(); vx.ellipse(0,7,46,10,0,0,Math.PI*2); vx.fill();
+    vx.restore();
+  }
+  // 左侧钢帽/连接件
+  vx.fillStyle='rgba(60,70,78,.9)';
+  vx.fillRect(w*0.52, h*0.12, 60, h*0.5);
+  vx.fillStyle='rgba(90,105,115,.35)';
+  vx.fillRect(w*0.52+8, h*0.12, 10, h*0.5);
+  // 灯光扫过
+  const lx = (Math.sin(vt*.7)*.5+.5)*w;
+  const lg = vx.createRadialGradient(lx,h*.55,10,lx,h*.55,300);
+  lg.addColorStop(0,'rgba(255,255,240,.10)'); lg.addColorStop(1,'rgba(255,255,240,0)');
+  vx.fillStyle=lg; vx.fillRect(0,0,w,h);
+  // 扫描线噪声
+  vx.fillStyle='rgba(255,255,255,.018)';
+  for(let y=(vt*40)%4; y<h; y+=4) vx.fillRect(0,y,w,1);
+  // 图传水印
+  vx.fillStyle='rgba(255,255,255,.5)'; vx.font='12px monospace';
+  vx.fillText('CAM1 · 1080P · ' + new Date().toLocaleTimeString('zh-CN',{hour12:false}), w-210, h-16);
+  requestAnimationFrame(drawVideo);
+}
+drawVideo();
+
+/* ============ 高压冲击曲线 ============ */
+const cc = $('curveCanvas'), cx2 = cc.getContext('2d');
+function cResize(){ cc.width = cc.clientWidth*2; cc.height = cc.clientHeight*2; }
+addEventListener('resize', cResize); cResize();
+let pulse = null; // {t0, kv}
+function firePulse(){
+  pulse = {t0: performance.now(), kv: cfg.kv};
+}
+function drawCurve(){
+  const w=cc.width, h=cc.height;
+  cx2.fillStyle='rgba(4,10,8,.9)'; cx2.fillRect(0,0,w,h);
+  cx2.strokeStyle='rgba(120,150,135,.25)'; cx2.lineWidth=1;
+  for(let i=1;i<5;i++){ cx2.beginPath(); cx2.moveTo(0,h*i/5); cx2.lineTo(w,h*i/5); cx2.stroke(); }
+  for(let i=1;i<8;i++){ cx2.beginPath(); cx2.moveTo(w*i/8,0); cx2.lineTo(w*i/8,h); cx2.stroke(); }
+  if(pulse){
+    const base = h*0.72, now = performance.now();
+    cx2.strokeStyle='#3ddc84'; cx2.lineWidth=2.4; cx2.beginPath();
+    for(let x=0;x<w;x+=3){
+      const tms = now - (w-x)/w*3000;
+      let y = base;
+      const dt = tms - pulse.t0;
+      if(dt>=0 && dt<900){
+        const amp = (h*0.62) * (pulse.kv/60);
+        const env = Math.exp(-dt/160);
+        const osc = Math.cos(dt/22);
+        y = base - amp*env*osc + Math.random()*2;
+      }
+      x===0 ? cx2.moveTo(x,y) : cx2.lineTo(x,y);
+    }
+    cx2.stroke();
+    if(now - pulse.t0 >= 1200) pulse = null;   // 波形播完自动回到基线
+  }
+  requestAnimationFrame(drawCurve);
+}
+drawCurve();
+
+/* ============ 抽屉 / 设置 ============ */
+function openDrawer(){ $('drawer').classList.add('show'); $('drawerMask').classList.add('show'); }
+function closeDrawer(){ $('drawer').classList.remove('show'); $('drawerMask').classList.remove('show'); }
+$('menuBtn').onclick = openDrawer;
+$('drawerMask').onclick = closeDrawer;
+document.querySelectorAll('.dtab').forEach(t=>{
+  t.onclick = ()=>{
+    document.querySelectorAll('.dtab').forEach(x=>x.classList.remove('on'));
+    t.classList.add('on');
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+    $(t.dataset.p).classList.add('on');
+  };
+});
+document.querySelectorAll('.seg').forEach(seg=>{
+  seg.addEventListener('click', e=>{
+    const o = e.target.closest('.opt'); if(!o) return;
+    seg.querySelectorAll('.opt').forEach(x=>x.classList.remove('on'));
+    o.classList.add('on');
+  });
+});
+$('fCount').oninput = e=> $('fCountV').textContent = e.target.value+' 片';
+$('fMotor').oninput = e=> $('fMotorV').textContent = e.target.value+' mm/s';
+$('fExt').oninput   = e=> $('fExtV').textContent   = e.target.value+' mm/s';
+$('fRet').oninput   = e=> $('fRetV').textContent   = e.target.value+' mm/s';
+$('fKv').oninput = e=> $('fKvV').textContent = e.target.value+'kV';
+$('fTh').oninput = e=> $('fThV').textContent = e.target.value+'MΩ';
+$('saveLine').onclick = ()=>{
+  if(running) return toast('检测中不可修改线路设置');
+  cfg.count = +$('fCount').value;
+  cfg.phase = document.querySelector('#fPhase .opt.on').textContent;
+  applyPhaseUI();
+  cfg.linkType = document.querySelector('#fLink .opt.on').textContent;
+  cfg.side = document.querySelector('#fSide .opt.on').textContent;
+  cfg.oppSide = $('fOppSide').value;
+  applyLinkTypeUI();
+  $('mLine').textContent = $('fLine').value;
+  cfg.temp = $('fTemp').value; cfg.humi = $('fHumi').value; cfg.wind = $('fWind').value;
+  applyEnv();
+  resetPieces(); closeDrawer();
+  toast('已保存：' + cfg.phase + ' ' + (cfg.linkType==='双联' ? ('双联 '+cfg.side+'/'+cfg.oppSide) : cfg.side) +
+    ' · ' + cfg.count + ' 片 / ' + cfg.temp + '℃ / ' + cfg.humi + '%RH / ' + cfg.wind + 'm/s');
+};
+$('saveParam').onclick = ()=>{
+  cfg.kv = +$('fKv').value; cfg.th = +$('fTh').value;
+  cfg.motor = +$('fMotor').value;
+  cfg.ext = +$('fExt').value; cfg.ret = +$('fRet').value;
+  $('kvShow').textContent = cfg.kv+'kV'; $('thShow').textContent = cfg.th+'MΩ';
+  $('sysMotion').textContent = cfg.motor+'mm/s';
+  closeDrawer();
+  toast('参数已下发：电机 '+cfg.motor+'mm/s · 探针 伸'+cfg.ext+'/复'+cfg.ret+' mm/s');
+};
+
+/* ===== 环境信息联动 ===== */
+function applyEnv(){
+  $('envT').textContent = cfg.temp + '℃';
+  $('envH').textContent = cfg.humi + '%RH';
+  $('envW').textContent = cfg.wind + 'm/s';
+}
+applyEnv();
+
+/* ===== IP 修改 ===== */
+function applyIp(inputId, btnId, sysId, label){
+  const v = $(inputId).value.trim();
+  const ok = /^(\d{1,3}\.){3}\d{1,3}$/.test(v) && v.split('.').every(p => +p <= 255);
+  if(!ok){ toast(label + ' IP 格式不正确，请检查'); return; }
+  $(sysId).textContent = v;
+  const b = $(btnId); b.textContent = '重连中…'; b.classList.remove('ok');
+  toast(label + ' IP 已修改为 ' + v + '，链路重连中…');
+  setTimeout(()=>{ b.textContent = '已应用'; b.classList.add('ok');
+    toast(label + '（' + v + '）链路重连成功'); }, 1400);
+}
+$('applyRbtIp').onclick = ()=>{ cfg.rbtIp = $('fRbtIp').value.trim();
+  applyIp('fRbtIp','applyRbtIp','sysRbtIp','机器人'); };
+$('applyCamIp').onclick = ()=>{ cfg.camIp = $('fCamIp').value.trim();
+  applyIp('fCamIp','applyCamIp','sysCamIp','摄像头'); };
+
+/* ===== OTA 升级 ===== */
+function runOta(btnId, progId, verId, sysId, key, name){
+  const b = $(btnId), p = $(progId), bar = p.querySelector('i');
+  if(b.classList.contains('busy')) return;
+  b.classList.add('busy'); b.textContent = '正在下载固件包…';
+  p.classList.add('on'); bar.style.width = '0%';
+  let pct = 0;
+  const t = setInterval(()=>{
+    pct += Math.random()*14 + 6;
+    if(pct >= 100){
+      pct = 100; clearInterval(t);
+      bar.style.width = '100%';
+      b.textContent = '校验并写入中…';
+      setTimeout(()=>{
+        const a = fw[key]; a[2] += 1;
+        const v = fwStr(a);
+        $(verId).textContent = v; $(sysId).textContent = v;
+        b.classList.remove('busy'); b.textContent = name + '升级（OTA）';
+        p.classList.remove('on'); bar.style.width = '0%';
+        toast(name + '固件已升级至 ' + v + '，设备将自动重启生效');
+      }, 900);
+      return;
+    }
+    bar.style.width = pct.toFixed(0) + '%';
+    b.textContent = '正在下载固件包… ' + pct.toFixed(0) + '%';
+  }, 260);
+}
+$('otaDet').onclick  = ()=> runOta('otaDet','progDet','detFwV','sysDetFw','det','检测模块');
+$('otaMain').onclick = ()=> runOta('otaMain','progMain','mainFwV','sysMainFw','main','主控模块');
+$('otaBtn').onclick = ()=> toast('已是最新版本 V3.1.0');
+
+/* ============ 报告 ============ */
+function openReport(){
+  const done = pieces.filter(p=>p.s===2||p.s===3).length;
+  const ok = pieces.filter(p=>p.s===2).length;
+  const bad = pieces.filter(p=>p.s===3).length;
+  $('rTotal').textContent = done; $('rOk').textContent = ok; $('rBad').textContent = bad;
+  $('rRate').textContent = done ? (bad/done*100).toFixed(2)+'%' : '0.0%';
+  $('rTh').textContent = cfg.th+'MΩ';
+  $('rptSub').textContent = $('fLine').value+' · 杆塔 #020 · '+cfg.phase+' '+
+    (cfg.linkType==='双联' ? ('双联 所在'+cfg.side+' / 对侧'+cfg.oppSide) : cfg.side)+
+    ' · '+new Date().toLocaleString('zh-CN',{hour12:false});
+  const l = $('rptList');
+  l.innerHTML = badList.length
+    ? badList.map(b=>`<div class="row"><span>${b.idx}</span><b>异常 ${b.v} MΩ</b></div>`).join('')
+    : '<div class="row"><span>暂无异常记录</span></div>';
+  $('rptMask').classList.add('show');
+}
+$('openRpt').onclick = ()=>{ closeDrawer(); openReport(); };
+$('closeRpt').onclick = ()=> $('rptMask').classList.remove('show');
+$('rptMask').onclick = e=>{ if(e.target===$('rptMask')) $('rptMask').classList.remove('show'); };
+$('expWord').onclick = ()=> toast('已生成 Word 报告并保存至本地（符合定制模板）');
+$('expPdf').onclick  = ()=> toast('已生成 PDF 报告并保存至本地（符合定制模板）');
+
+/* ============ 相别/串切换 ============ */
+function bindTabs(id, key){
+  $(id).addEventListener('click', e=>{
+    const t = e.target.closest('.tab'); if(!t) return;
+    if(running) return toast('检测中不可切换');
+    $(id).querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+    t.classList.add('on'); cfg[key] = t.dataset.v;
+    resetPieces();
+  });
+}
+bindTabs('sideTabs','side');
+function applyPhaseUI(){
+  $('phaseName').textContent = cfg.phase;
+}
+
+/* 所在串号 ↔ 对侧串号 自动互斥 */
+document.querySelectorAll('#fSide .opt').forEach(o=>{
+  o.addEventListener('click', ()=>{
+    const v = o.textContent;
+    if($('fOppSide').value !== '无') $('fOppSide').value = (v === '左串') ? '右串' : '左串';
+  });
+});
+$('fOppSide').addEventListener('change', e=>{
+  const v = e.target.value;
+  if(v === '无') return;
+  const cur = document.querySelector('#fSide .opt.on');
+  if(cur && cur.textContent === v){
+    const other = document.querySelector('#fSide .opt:not(.on)');
+    if(other){
+      document.querySelectorAll('#fSide .opt').forEach(x=>x.classList.remove('on'));
+      other.classList.add('on');
+    }
+  }
+});
+
+function applyLinkTypeUI(){
+  const dual = cfg.linkType === '双联';
+  $('sideTabs').style.display = 'none';  // 单联/双联均不在左侧显示左串/右串切换
+  document.documentElement.style.setProperty('--spw', dual ? '278px' : '216px');
+  renderList();
+}
+applyLinkTypeUI();
+
+/* ============ 双路电量显示 ============ */
+let bat = {robot:82, pad:76};
+function paintBat(){
+  [['batRFill','batR','batRBox','robot'],['batAFill','batA','batABox','pad']].forEach(([fid,tid,bid,k])=>{
+    const v = bat[k];
+    $(fid).style.height = v + '%';
+    $(tid).textContent = v + '%';
+    const box = $(bid);
+    box.classList.toggle('low',  v <= 30 && v > 15);
+    box.classList.toggle('crit', v <= 15);
+  });
+}
+paintBat();
+// 演示用：机器人检测时缓慢掉电，安卓设备缓慢待机掉电
+setInterval(()=>{
+  if(running && Math.random() < 0.35 && bat.robot > 3) bat.robot -= 1;
+  if(Math.random() < 0.08 && bat.pad > 3) bat.pad -= 1;
+  paintBat();
+}, 6000);
+
+/* ============ 信号数值抖动 ============ */
+setInterval(()=>{ $('sigLat').textContent = (9+Math.floor(Math.random()*6))+'ms'; }, 2000);
+
+applyPhaseUI();
+resetPieces();
+</script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 抽屉竖排 Tab 选择器（对应 .dtab / .dtab.on，左侧 3dp 指示条） -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_selected="true">
+        <layer-list>
+            <item>
+                <shape android:shape="rectangle">
+                    <solid android:color="#143DDC84" />
+                </shape>
+            </item>
+            <item android:width="3dp" android:gravity="start">
+                <shape android:shape="rectangle">
+                    <solid android:color="@color/dt_green" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/transparent" />
+        </shape>
+    </item>
+</selector>

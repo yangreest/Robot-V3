@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+    <!-- 低值零值智能研判平台 UI 配色（对应 HTML :root 变量） -->
+    <color name="dt_green">#3DDC84</color>
+    <color name="dt_red">#FF3B30</color>
+    <color name="dt_blue">#4DA3FF</color>
+    <color name="dt_amber">#FFB340</color>
+    <color name="dt_txt">#E8F0EA</color>
+    <color name="dt_txt2">#9FB3A8</color>
+    <color name="dt_txt3">#CFE4D8</color>
+    <color name="dt_line">#24FFFFFF</color>
+    <color name="dt_panel">#B80A0E0C</color>
+    <color name="dt_drawer_bg">#F0060A08</color>
+    <color name="dt_modal_bg">#FF0C1210</color>
+    <color name="dt_black_40">#66000000</color>
+    <color name="dt_black_50">#80000000</color>
+    <color name="dt_black_35">#59000000</color>
+    <color name="dt_white_05">#0DFFFFFF</color>
+    <color name="dt_white_06">#0FFFFFFF</color>
+    <color name="dt_white_08">#14FFFFFF</color>
+    <color name="dt_green_16">#293DDC84</color>
+    <color name="dt_green_14">#243DDC84</color>
+    <color name="dt_green_12">#1F3DDC84</color>
+    <color name="dt_green_10">#1A3DDC84</color>
+    <color name="dt_green_73">#BA3DDC84</color>
+    <color name="dt_green_88">#E03DDC84</color>
+    <color name="dt_green_45">#733DDC84</color>
+    <color name="dt_red_16">#29FF3B30</color>
+    <color name="dt_red_12">#1FFF3B30</color>
+    <color name="dt_red_92">#EBFF3B30</color>
+    <color name="dt_red_70">#B3FF3B30</color>
+    <color name="dt_red_88">#E0FF3B30</color>
+    <color name="dt_blue_16">#294DA3FF</color>
+    <color name="dt_blue_08">#144DA3FF</color>
+    <color name="dt_amber_13">#21FFB340</color>
+    <color name="dt_amber_10">#1AFFB340</color>
+    <color name="dt_ico_gray">#8FA39A</color>
+    <color name="dt_dark_input">#FF111111</color>
+    <color name="dt_primary_dark">#04140C</color>
+</resources>
