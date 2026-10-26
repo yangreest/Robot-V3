@@ -10,6 +10,9 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // 本地 AAR 仓库：以标准 artifact 方式引用 libs 下的 AAR，
+        // 确保 AGP 合并 AAR 内 jni/ 原生库（.so），避免 UnsatisfiedLinkError
+        flatDir { dirs "${rootDir}/app/libs" }
     }
 }
 rootProject.name = "InsulatorDetect"
