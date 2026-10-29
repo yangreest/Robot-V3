@@ -15,7 +15,15 @@
         android:id="@+id/fpvWidget"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#10161A" />
+        android:background="#10161A" >
+
+        <View
+            android:id="@+id/flashView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:alpha="0"
+            android:background="@color/white" />
+    </com.skydroid.fpvplayer.FPVWidget>
 
     <!-- 图传水印（对应 drawVideo 中 CAM1 水印） -->
     <TextView
@@ -745,12 +753,6 @@
         tools:text="提示消息" />
 
     <!-- ===== 拍照白闪（对应 .flash，z:70） ===== -->
-    <View
-        android:id="@+id/flashView"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:alpha="0"
-        android:background="@color/white" />
 
     <!-- ===== 右侧抽屉遮罩（对应 .drawer-mask，z:40） ===== -->
     <View
