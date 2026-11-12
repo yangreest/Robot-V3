@@ -35,7 +35,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="16dp"
-                    android:text="数传:"/>
+                    android:text="收发格式:"/>
                 <RadioGroup
                     android:id="@+id/rg_data"
                     android:layout_width="wrap_content"
@@ -145,9 +145,176 @@
                     android:text=">0.2.6固件" />
             </LinearLayout>
 
+            <!-- ==================== 数传 / UDP 测试面板 ==================== -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="数传 / UDP 测试"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tv_link_state"
+                android:layout_width="260dp"
+                android:layout_height="wrap_content"
+                android:text="机型:--  管道:未创建  状态:未连接"
+                android:textSize="12sp" />
+
+            <RadioGroup
+                android:id="@+id/rg_link"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <RadioButton
+                    android:id="@+id/rb_link_auto"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:text="SDK数传(按机型自动)"
+                    android:textSize="13sp" />
+
+                <RadioButton
+                    android:id="@+id/rb_link_g12g20"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="G12G20专用管道"
+                    android:textSize="13sp" />
+
+                <RadioButton
+                    android:id="@+id/rb_link_udp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="自定义UDP"
+                    android:textSize="13sp" />
+            </RadioGroup>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="本地端口" />
+
+                <EditText
+                    android:id="@+id/et_local_port"
+                    android:layout_width="72dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:inputType="number"
+                    android:text="14550"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="对端端口" />
+
+                <EditText
+                    android:id="@+id/et_remote_port"
+                    android:layout_width="72dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:inputType="number"
+                    android:text="14550"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="对端IP" />
+
+                <EditText
+                    android:id="@+id/et_remote_ip"
+                    android:layout_width="150dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:inputType="text"
+                    android:text="192.168.144.108"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <CheckBox
+                android:id="@+id/cb_udp_filter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:text="只收对端IP的数据(SDK默认)"
+                android:textSize="12sp" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btn_link_connect"
+                    style="@style/smallButton"
+                    android:layout_marginEnd="8dp"
+                    android:text="连接" />
+
+                <Button
+                    android:id="@+id/btn_link_disconnect"
+                    style="@style/smallButton"
+                    android:layout_marginEnd="8dp"
+                    android:text="断开" />
+
+                <Button
+                    android:id="@+id/btn_link_reset_stat"
+                    style="@style/smallButton"
+                    android:text="统计清零" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tv_link_stats"
+                android:layout_width="260dp"
+                android:layout_height="wrap_content"
+                android:text="TX 0 帧 / 0 B    RX 0 帧 / 0 B"
+                android:textSize="12sp" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="周期ms" />
+
+                <EditText
+                    android:id="@+id/et_loop_interval"
+                    android:layout_width="72dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:inputType="number"
+                    android:text="1000"
+                    android:textSize="13sp" />
+
+                <Button
+                    android:id="@+id/btn_loop_send"
+                    style="@style/smallButton"
+                    android:layout_marginStart="8dp"
+                    android:text="连续发送" />
+            </LinearLayout>
+
             <Button
                 android:id="@+id/btn_rc_buttons"
                 style="@style/smallButton"
+                android:layout_marginTop="10dp"
                 android:text="自定义遥控器通道" />
         </LinearLayout>
     </ScrollView>
@@ -165,6 +332,33 @@
             android:layout_margin="16dp"
             android:layout_weight="1" />
 
+        <!-- 数传收发追加日志（时间戳 + 方向 + 长度 + 内容） -->
+        <ScrollView
+            android:id="@+id/sv_link_log"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
+            android:layout_weight="2"
+            android:background="#11000000">
+
+            <TextView
+                android:id="@+id/tv_link_log"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:padding="6dp"
+                android:textIsSelectable="true"
+                android:textSize="12sp" />
+        </ScrollView>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="4dp"
+            android:text="HEX 模式示例：A5 5A 01 00（空格可省略，需偶数个字符）"
+            android:textSize="11sp" />
 
         <LinearLayout
             android:layout_width="match_parent"

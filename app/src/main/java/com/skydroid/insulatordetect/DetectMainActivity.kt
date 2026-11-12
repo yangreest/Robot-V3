@@ -77,6 +77,12 @@ class DetectMainActivity : AppCompatActivity(),
     private lateinit var engine: DetectionEngine
     private val robotLink = RobotLink()
 
+    /** 遥控器连接状态（由 SDK 回调维护） */
+    private var rcConnected = false
+
+    /** 进入 SDK 调试页前释放了机器人链路，返回后需重建 */
+    private var linkReleasedForDebug = false
+
     /* ==================== SDK ==================== */
     private var c10Pro: C10Pro? = null
     private var customButtonHelper: ButtonHelper? = null
@@ -344,6 +350,7 @@ class DetectMainActivity : AppCompatActivity(),
             RCSDKManager.initSDK(this, object : SDKManagerCallBack {
                 override fun onRcConnected() {
                     Log.i(TAG, "遥控器已连接")
+                    rcConnected = true
                     robotLink.listener = this@DetectMainActivity
                     robotLink.connect()
                     rcMonitor.listener = this@DetectMainActivity
@@ -369,6 +376,7 @@ class DetectMainActivity : AppCompatActivity(),
 
                 override fun onRcDisconnect() {
                     Log.i(TAG, "遥控器断开")
+                    rcConnected = false
                     runOnUiThread {
                         drawerController.setSysInfo("已断开", null)
                         showToast("遥控器已断开")
@@ -618,6 +626,9 @@ class DetectMainActivity : AppCompatActivity(),
     }
 
     override fun onSdkDebugClick() {
+        // 调试页会占用同一数传通道，先释放机器人链路，返回后在 onResume 重建
+        linkReleasedForDebug = true
+        robotLink.disconnect()
         startActivity(Intent(this, HomeActivity::class.java))
     }
 
@@ -797,6 +808,20 @@ class DetectMainActivity : AppCompatActivity(),
     // =========================================================================
     //  生命周期
     // =========================================================================
+
+    override fun onResume() {
+        super.onResume()
+        // 从 SDK 调试页返回：等调试页释放通道后重建机器人数据链路
+        if (linkReleasedForDebug) {
+            linkReleasedForDebug = false
+            handler.postDelayed({
+                if (rcConnected) {
+                    robotLink.listener = this
+                    robotLink.connect()
+                }
+            }, 500)
+        }
+    }
 
     override fun onDestroy() {
         super.onDestroy()

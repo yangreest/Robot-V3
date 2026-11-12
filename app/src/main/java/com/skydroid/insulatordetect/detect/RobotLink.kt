@@ -1,6 +1,7 @@
 package com.skydroid.insulatordetect.detect
 
 import android.util.Log
+import com.skydroid.insulatordetect.String2ByteArrayUtils
 import com.skydroid.rcsdk.PipelineManager
 import com.skydroid.rcsdk.comm.CommListener
 import com.skydroid.rcsdk.common.Uart
@@ -44,6 +45,8 @@ class RobotLink {
      */
     fun connect() {
         if (pipeline != null) return
+        // createPipeline(UART0) 内部按机型分派：G12/G20/G30/G16 → G12G20 管道（UDP 承载），
+        // H12 → 串口，H12Pro/H16/H20/H30 → UDP，因此无需在应用层区分机型
         val p = PipelineManager.createPipeline(Uart.UART0) ?: return
         p.onCommListener = object : CommListener {
             override fun onConnectSuccess() {
@@ -80,7 +83,8 @@ class RobotLink {
      */
     private fun parseFrame(bytes: ByteArray) {
         val text = runCatching { String(bytes) }.getOrDefault("")
-        Log.d(TAG, "收到机器人数据 长度${bytes.size}: $text")
+        val hex = String2ByteArrayUtils.bytes2Hex(bytes)
+        Log.d(TAG, "收到机器人数据 长度${bytes.size} HEX:$hex TEXT:$text")
         listener?.onRobotData(text)
     }
 

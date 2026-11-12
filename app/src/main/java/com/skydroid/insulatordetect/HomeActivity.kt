@@ -2,11 +2,16 @@ package com.skydroid.insulatordetect
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.text.TextUtils
 import android.util.Log
 import android.view.View
+import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.RadioGroup
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -62,6 +67,36 @@ class HomeActivity: AppCompatActivity() {
     private var c10Pro: C10Pro? = null// 适用于0.2.7及以上固件 相机控制 + 全版本的云台控制
     private var c10ProCamera: C10ProCamera? = null// 适用于0.2.7以下固件 相机控制
     private var isDataHex = false
+
+    /* ==================== 数传 / UDP 测试 ==================== */
+    private var rgLink: RadioGroup? = null
+    private var tvLinkState: TextView? = null
+    private var tvLinkStats: TextView? = null
+    private var tvLinkLog: TextView? = null
+    private var svLinkLog: ScrollView? = null
+    private var etLocalPort: EditText? = null
+    private var etRemoteIp: EditText? = null
+    private var etRemotePort: EditText? = null
+    private var etLoopInterval: EditText? = null
+    private var cbUdpFilter: CheckBox? = null
+    private var btnLoopSend: Button? = null
+
+    /** 追加式收发日志（SDK 回调线程与主线程均会写入，需加锁） */
+    private val linkLog = StringBuilder()
+    private var linkConnected = false
+    private var txFrames = 0
+    private var txBytes = 0L
+    private var rxFrames = 0
+    private var rxBytes = 0L
+    private var looping = false
+    private val loopHandler = Handler(Looper.getMainLooper())
+    private val loopRunnable = object : Runnable {
+        override fun run() {
+            if (!looping) return
+            sendCurrent()
+            loopHandler.postDelayed(this, loopInterval())
+        }
+    }
     // TODO 注意:
     // TODO 使用时,请确保其他应用(包含助手、地面站)处于停止关闭状态,避免端口占用导致数据链路失败;
     // TODO 获取摇杆杆量值,无法主动上报,请求一次获取一次,推荐至少100ms读取一次;
@@ -71,17 +106,16 @@ class HomeActivity: AppCompatActivity() {
         setContentView(R.layout.activity_home)
         tvInfo = findViewById(R.id.tv_info)
         etData = findViewById(R.id.et_data)
+        bindLinkViews()
         infoLiveData.observe(this) { str -> tvInfo?.text = str }
         // TODO 初始化SDK,初始化一次即可;
         RCSDKManager.initSDK(this, object : SDKManagerCallBack {
             override fun onRcConnected() {
                 //创建通讯管道(内部有断开重连机制，只需要调用一次连接即可)
                 // 数传管道,未连接 接收机 时,数传管道 连接失败;
-                val pipeline = PipelineManager.createPipeline(Uart.UART0)
-                pipeline!!.onCommListener = getCommListener(0, "数传管道")
-                //连接通讯管道
-                PipelineManager.connectPipeline(pipeline)
-                this@HomeActivity.pipeline = pipeline
+                // G12/G20/G30/G16 由 SDK 自动分派到 G12G20 管道（底层 UDP 承载）
+                appendLog("SYS", "遥控器已连接，机型 ${deviceName()}")
+                connectLink()
             }
 
             override fun onRcConnectFail(e: SkyException?) {}
@@ -133,14 +167,29 @@ class HomeActivity: AppCompatActivity() {
         return object : CommListener {
             override fun onConnectSuccess() {
                 log("$tag 连接成功")
+                if (type == 0) {
+                    linkConnected = true
+                    appendLog("SYS", "$tag 连接成功")
+                    updateLinkState()
+                }
             }
 
             override fun onConnectFail(e: SkyException) {
                 log("$tag  连接失败$e")
+                if (type == 0) {
+                    linkConnected = false
+                    appendLog("ERR", "$tag 连接失败：$e")
+                    updateLinkState()
+                }
             }
 
             override fun onDisconnect() {
                 log("$tag 断开连接")
+                if (type == 0) {
+                    linkConnected = false
+                    appendLog("SYS", "$tag 断开连接")
+                    updateLinkState()
+                }
             }
 
             override fun onReadData(bytes: ByteArray) {
@@ -148,6 +197,7 @@ class HomeActivity: AppCompatActivity() {
                     log("$tag 收到长度${bytes.size},,, 数据 "+ String(bytes))
                     // 数传管道
                     printInfo(EnumInfoKey.DataTransmission, "数传：${if (isDataHex) String2ByteArrayUtils.bytes2Hex(bytes) else String(bytes)}")
+                    onLinkData(bytes)
                 }
             }
         }
@@ -261,16 +311,10 @@ class HomeActivity: AppCompatActivity() {
         findViewById<View>(R.id.btn_clear).setOnClickListener {
             mReceiveInfo.cleatInfo()
             tvInfo?.text = ""
+            clearLinkLog()
         }
-        findViewById<View>(R.id.btn_send).setOnClickListener {
-            val temp = etData?.text?.toString() ?: ""
-            if (TextUtils.isEmpty(temp)) {
-                Toast.makeText(applicationContext, "请输入要发送的字符!", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-            this@HomeActivity.pipeline?.writeData(temp.toByteArray())
-            Toast.makeText(applicationContext, "发送 $temp", Toast.LENGTH_SHORT).show()
-        }
+        findViewById<View>(R.id.btn_send).setOnClickListener { sendCurrent() }
+        initLinkTestView()
         findViewById<View>(R.id.btn_led).setOnClickListener {
             ledCameraControl(false)
         }
@@ -429,6 +473,207 @@ class HomeActivity: AppCompatActivity() {
 
     }
 
+    // =========================================================================
+    //  数传 / UDP 测试
+    // =========================================================================
+
+    private fun bindLinkViews() {
+        rgLink = findViewById(R.id.rg_link)
+        tvLinkState = findViewById(R.id.tv_link_state)
+        tvLinkStats = findViewById(R.id.tv_link_stats)
+        tvLinkLog = findViewById(R.id.tv_link_log)
+        svLinkLog = findViewById(R.id.sv_link_log)
+        etLocalPort = findViewById(R.id.et_local_port)
+        etRemoteIp = findViewById(R.id.et_remote_ip)
+        etRemotePort = findViewById(R.id.et_remote_port)
+        etLoopInterval = findViewById(R.id.et_loop_interval)
+        cbUdpFilter = findViewById(R.id.cb_udp_filter)
+        btnLoopSend = findViewById(R.id.btn_loop_send)
+        updateChannelUi()
+        updateLinkState()
+        updateStats()
+    }
+
+    private fun initLinkTestView() {
+        findViewById<View>(R.id.btn_link_connect).setOnClickListener { connectLink() }
+        findViewById<View>(R.id.btn_link_disconnect).setOnClickListener { disconnectLink() }
+        findViewById<View>(R.id.btn_link_reset_stat).setOnClickListener { resetStats() }
+        btnLoopSend?.setOnClickListener { toggleLoop() }
+        rgLink?.setOnCheckedChangeListener { _, _ ->
+            updateChannelUi()
+            // 已建管道时切换通道立即重连，便于对比 G12G20 与自定义 UDP
+            if (pipeline != null) connectLink()
+        }
+    }
+
+    /** UDP 参数仅在「自定义UDP」通道下可编辑 */
+    private fun updateChannelUi() {
+        val udp = rgLink?.checkedRadioButtonId == R.id.rb_link_udp
+        etLocalPort?.isEnabled = udp
+        etRemoteIp?.isEnabled = udp
+        etRemotePort?.isEnabled = udp
+        cbUdpFilter?.isEnabled = udp
+    }
+
+    /**
+     * 按所选通道创建并连接管道。
+     * SDK数传：createPipeline(UART0)，SDK 内部按机型分派（G20 → G12G20Pipeline）
+     */
+    private fun connectLink() {
+        disconnectLink()
+        val p: Pipeline? = when (rgLink?.checkedRadioButtonId) {
+            R.id.rb_link_g12g20 -> PipelineManager.createG12G20Pipeline()
+            R.id.rb_link_udp -> createUdpPipeline()
+            else -> PipelineManager.createPipeline(Uart.UART0)
+        }
+        if (p == null) {
+            appendLog("ERR", "管道创建失败：请确认遥控器已连接、UDP 参数填写正确")
+            updateLinkState()
+            return
+        }
+        p.onCommListener = getCommListener(0, "数传管道")
+        pipeline = p
+        appendLog("SYS", "创建管道 ${describe(p)}，发起连接…")
+        PipelineManager.connectPipeline(p)
+        updateLinkState()
+    }
+
+    /** 自定义 UDP：本地端口 / 对端 IP / 对端端口，可选关闭远端 IP 过滤 */
+    private fun createUdpPipeline(): Pipeline? {
+        val local = etLocalPort?.text?.toString()?.trim()?.toIntOrNull() ?: 0
+        val remote = etRemotePort?.text?.toString()?.trim()?.toIntOrNull() ?: 0
+        val ip = etRemoteIp?.text?.toString()?.trim().orEmpty()
+        if (ip.isEmpty()) { toast("请填写对端 IP"); return null }
+        if (local !in 1..65535 || remote !in 1..65535) { toast("端口范围 1~65535"); return null }
+        return if (cbUdpFilter?.isChecked != false) {
+            PipelineManager.createUDPPipeline(local, ip, remote)
+        } else {
+            // 关闭远端 IP/端口过滤：对端源地址与配置不一致时也能收到
+            PipelineManager.createUDPPipeline(local, ip, remote, false, false)
+        }
+    }
+
+    private fun disconnectLink() {
+        stopLoop()
+        val p = pipeline ?: return
+        pipeline = null
+        linkConnected = false
+        runCatching { PipelineManager.disconnectPipeline(p) }
+        appendLog("SYS", "管道已断开")
+        updateLinkState()
+    }
+
+    /** 管道实际类型：G20 上应为 G12G20Pipeline[G12G20]，自定义 UDP 为 UDPPipeline[UDP] */
+    private fun describe(p: Pipeline): String {
+        val type = runCatching { p.getPipelineType().name }.getOrNull() ?: "?"
+        return "${p.javaClass.simpleName}[$type]"
+    }
+
+    private fun deviceName(): String =
+        runCatching { RCSDKUtils.getDeviceType()?.name }.getOrNull() ?: "未知"
+
+    private fun onLinkData(bytes: ByteArray) {
+        rxFrames++
+        rxBytes += bytes.size
+        appendLog("RX", "${bytes.size}B  ${formatData(bytes)}")
+        updateStats()
+    }
+
+    /** 按当前 TXT/HEX 开关发送输入框内容 */
+    private fun sendCurrent() {
+        val p = pipeline
+        if (p == null) { toast("请先连接数传管道"); stopLoop(); return }
+        val text = etData?.text?.toString().orEmpty()
+        if (text.isEmpty()) { toast("请输入要发送的内容"); stopLoop(); return }
+        val bytes: ByteArray = if (isDataHex) {
+            val hex = text.replace(" ", "")
+            if (hex.length % 2 != 0 || !hex.all { it in "0123456789abcdefABCDEF" }) {
+                toast("HEX 格式错误：需偶数个 0-9A-F 字符")
+                stopLoop()
+                return
+            }
+            String2ByteArrayUtils.hex2Bytes(hex) ?: byteArrayOf()
+        } else {
+            text.toByteArray()
+        }
+        if (bytes.isEmpty()) { toast("发送内容为空"); stopLoop(); return }
+        runCatching { p.writeData(bytes) }
+            .onSuccess {
+                txFrames++
+                txBytes += bytes.size
+                appendLog("TX", "${bytes.size}B  ${formatData(bytes)}")
+                updateStats()
+            }
+            .onFailure { appendLog("ERR", "发送失败：$it") }
+    }
+
+    private fun formatData(bytes: ByteArray): String =
+        if (isDataHex) String2ByteArrayUtils.bytes2Hex(bytes).orEmpty() else String(bytes)
+
+    private fun loopInterval(): Long =
+        (etLoopInterval?.text?.toString()?.trim()?.toLongOrNull() ?: 1000L).coerceAtLeast(20L)
+
+    private fun toggleLoop() {
+        if (looping) { stopLoop(); return }
+        if (pipeline == null) { toast("请先连接数传管道"); return }
+        looping = true
+        btnLoopSend?.text = "停止发送"
+        appendLog("SYS", "开始连续发送，周期 ${loopInterval()}ms")
+        loopHandler.post(loopRunnable)
+    }
+
+    private fun stopLoop() {
+        if (!looping) return
+        looping = false
+        loopHandler.removeCallbacks(loopRunnable)
+        btnLoopSend?.text = "连续发送"
+        appendLog("SYS", "停止连续发送")
+    }
+
+    private fun resetStats() {
+        txFrames = 0
+        txBytes = 0
+        rxFrames = 0
+        rxBytes = 0
+        updateStats()
+        appendLog("SYS", "收发统计已清零")
+    }
+
+    private fun updateStats() {
+        runOnUiThread {
+            tvLinkStats?.text = "TX $txFrames 帧 / $txBytes B    RX $rxFrames 帧 / $rxBytes B"
+        }
+    }
+
+    private fun updateLinkState() {
+        val desc = pipeline?.let { describe(it) } ?: "未创建"
+        val state = if (linkConnected) "已连接" else "未连接"
+        runOnUiThread { tvLinkState?.text = "机型:${deviceName()}  管道:$desc  状态:$state" }
+    }
+
+    @Synchronized
+    private fun appendLog(dir: String, msg: String) {
+        linkLog.append(AppUtils.getTimeStamp()).append(" [").append(dir).append("] ").append(msg).append('\n')
+        // 只保留最近 20000 字符，避免长时间连续发送撑爆内存
+        if (linkLog.length > 20000) linkLog.delete(0, linkLog.length - 20000)
+        val snapshot = linkLog.toString()
+        log("[$dir] $msg")
+        runOnUiThread {
+            tvLinkLog?.text = snapshot
+            svLinkLog?.post { svLinkLog?.fullScroll(View.FOCUS_DOWN) }
+        }
+    }
+
+    @Synchronized
+    private fun clearLinkLog() {
+        linkLog.setLength(0)
+        runOnUiThread { tvLinkLog?.text = "" }
+    }
+
+    private fun toast(msg: String) {
+        runOnUiThread { Toast.makeText(applicationContext, msg, Toast.LENGTH_SHORT).show() }
+    }
+
     private fun printInfo(key: EnumInfoKey, obj: Any?) {
         obj ?: return
         val sb = mReceiveInfo.updateInfo(key, obj)
@@ -448,16 +693,23 @@ class HomeActivity: AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         infoLiveData.removeObservers(this)
-        //断开遥控器连接（如果不断开，程序还在运行的时候，其他程序会出端口占用情况）
-        RCSDKManager.disconnectRC()
+        stopLoop()
+        loopHandler.removeCallbacksAndMessages(null)
         KeyManager.cancelListen(keySignalQualityListener)
+        // 只释放本页自己创建的管道；遥控器连接由 DetectMainActivity.onDestroy 统一断开，
+        // 否则从调试页返回主界面会连带断掉 RobotLink 的数传链路
         val p = pipeline
         if (p != null) {
-            PipelineManager.disconnectPipeline(p)
+            pipeline = null
+            runCatching { PipelineManager.disconnectPipeline(p) }
         }
         val localC10p = c10Pro
         if (localC10p != null) {
             PayloadManager.disconnectPayload(localC10p)
+        }
+        val localCamera = c10ProCamera
+        if (localCamera != null) {
+            PayloadManager.disconnectPayload(localCamera)
         }
     }
 }
