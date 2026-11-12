@@ -244,6 +244,16 @@ class DetectMainActivity : AppCompatActivity(),
     override fun onResume() {
         super.onResume()
         applyImmersiveMode()
+        // 从 SDK 调试页返回：等调试页释放通道后重建机器人数据链路
+        if (linkReleasedForDebug) {
+            linkReleasedForDebug = false
+            handler.postDelayed({
+                if (rcConnected) {
+                    robotLink.listener = this
+                    robotLink.connect()
+                }
+            }, 500)
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -864,20 +874,6 @@ class DetectMainActivity : AppCompatActivity(),
     // =========================================================================
     //  生命周期
     // =========================================================================
-
-    override fun onResume() {
-        super.onResume()
-        // 从 SDK 调试页返回：等调试页释放通道后重建机器人数据链路
-        if (linkReleasedForDebug) {
-            linkReleasedForDebug = false
-            handler.postDelayed({
-                if (rcConnected) {
-                    robotLink.listener = this
-                    robotLink.connect()
-                }
-            }, 500)
-        }
-    }
 
     override fun onDestroy() {
         super.onDestroy()
