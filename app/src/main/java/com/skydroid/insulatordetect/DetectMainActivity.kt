@@ -19,8 +19,10 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.skydroid.fpvplayer.FPVWidget
+import com.skydroid.fpvplayer.OnPlayerStateListener
 import com.skydroid.fpvplayer.PlayerType
 import com.skydroid.fpvplayer.RtspTransport
+import com.skydroid.fpvplayer.ffmpeg.FrameInfo
 import com.skydroid.rcsdk.KeyManager
 import com.skydroid.rcsdk.PayloadManager
 import com.skydroid.rcsdk.RCSDKManager
@@ -85,6 +87,9 @@ class DetectMainActivity : AppCompatActivity(),
     /* ==================== 视频 ==================== */
     private var fpvWidget: FPVWidget? = null
 
+    /** 模拟图传层：无 RTSP 视频流时显示，收到图传后隐藏 */
+    private lateinit var camPreviewLayer: View
+
     /* ==================== UI ==================== */
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var adapter: PieceAdapter
@@ -95,7 +100,6 @@ class DetectMainActivity : AppCompatActivity(),
     private lateinit var tvStatus: TextView
     private lateinit var tvTopLine: TextView
     private lateinit var tvTopTower: TextView
-    private lateinit var tvTopMode: TextView
     private lateinit var tvTopDone: TextView
     private lateinit var tvTopBad: TextView
     private lateinit var tvSigLine1: TextView
@@ -228,6 +232,31 @@ class DetectMainActivity : AppCompatActivity(),
         registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         // 时钟水印
         handler.post(clockTicker)
+        applyImmersiveMode()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        applyImmersiveMode()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // 弹窗关闭 / 切回本界面时重新收起系统栏
+        if (hasFocus) applyImmersiveMode()
+    }
+
+    /**
+     * 沉浸式全屏：状态栏与导航栏默认隐藏，布局铺满 640×400dp；
+     * 从屏幕边缘上滑可临时唤出 back/home/overview，松手后系统自动收回（IMMERSIVE_STICKY）。
+     */
+    private fun applyImmersiveMode() {
+        window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_FULLSCREEN
+                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
     }
 
     // =========================================================================
@@ -240,7 +269,6 @@ class DetectMainActivity : AppCompatActivity(),
         tvStatus = findViewById(R.id.tvStatus)
         tvTopLine = findViewById(R.id.tvTopLine)
         tvTopTower = findViewById(R.id.tvTopTower)
-        tvTopMode = findViewById(R.id.tvTopMode)
         tvTopDone = findViewById(R.id.tvTopDone)
         tvTopBad = findViewById(R.id.tvTopBad)
         tvSigLine1 = findViewById(R.id.tvSigLine1)
@@ -250,6 +278,7 @@ class DetectMainActivity : AppCompatActivity(),
         tvBatRobot = findViewById(R.id.tvBatRobot)
         tvBatAndroid = findViewById(R.id.tvBatAndroid)
         tvWatermark = findViewById(R.id.tvWatermark)
+        camPreviewLayer = findViewById(R.id.camPreviewLayer)
         tvPhase = findViewById(R.id.tvPhase)
         tvStrInfo = findViewById(R.id.tvStrInfo)
         tvOkBad = findViewById(R.id.tvOkBad)
@@ -327,12 +356,34 @@ class DetectMainActivity : AppCompatActivity(),
             try {
                 rcType = RCSDKUtils.getDeviceType().value
             } catch (_: Exception) { /* SDK 未初始化时忽略 */ }
+            // 图传接通后收起模拟画面层，断流时恢复，便于无相机情况下评估界面效果
+            onPlayerStateListener = object : OnPlayerStateListener {
+                override fun onConnected() {
+                    showCamPreview(false)
+                }
+
+                override fun onDisconnect() {
+                    showCamPreview(true)
+                }
+
+                override fun onReadFrame(info: FrameInfo?) {
+                    showCamPreview(false)
+                }
+            }
             start()
         }
     }
 
+    /** 切换模拟图传层显隐（回调可能来自解码线程，统一切回主线程） */
+    private fun showCamPreview(show: Boolean) {
+        val target = if (show) View.VISIBLE else View.GONE
+        if (camPreviewLayer.visibility == target) return
+        runOnUiThread { camPreviewLayer.visibility = target }
+    }
+
     /** 重建视频链路（摄像头 IP 修改后调用） */
     private fun rebuildFpv(url: String) {
+        showCamPreview(true)
         fpvWidget?.stop()
         fpvWidget?.url = url
         fpvWidget?.start()
@@ -463,7 +514,8 @@ class DetectMainActivity : AppCompatActivity(),
         runOnUiThread {
             tvTopDone.text = "已测 $done/$total"
             tvTopBad.text = "劣化 $bad"
-            tvOkBad.text = "合格 $ok · 异常 $bad"
+            // 劣化数已由 tvTopBad 展示，此处只报合格数，避免同一指标重复
+            tvOkBad.text = "合格 $ok"
         }
     }
 
@@ -524,10 +576,12 @@ class DetectMainActivity : AppCompatActivity(),
                 ivStart.setImageResource(R.drawable.ic_pause)
                 tvStart.text = "停止检测"
                 tvStart.setTextColor(0xFFFF3B30.toInt())
+                btnStart.setBackgroundResource(R.drawable.bg_ctl_pill_stop)
             } else {
                 ivStart.setImageResource(R.drawable.ic_play)
                 tvStart.text = if (config.isManual) "检测当前片" else "开始检测"
                 tvStart.setTextColor(0xFF3DDC84.toInt())
+                btnStart.setBackgroundResource(R.drawable.bg_ctl_pill_main)
             }
         }
     }
@@ -649,8 +703,8 @@ class DetectMainActivity : AppCompatActivity(),
         }
         config.mode = if (config.isManual) DetectConfig.MODE_AUTO else DetectConfig.MODE_MANUAL
         configStore.save(config)
+        // 模式状态直接体现在 btnMode 文案与配色上，顶栏不再重复一份
         updateModeButton()
-        tvTopMode.text = "模式 ${if (config.isManual) "手动" else "自动"}"
         showToast(if (config.isManual) "已切换至手动模式：逐片点选检测" else "已切换至自动模式：1.5s/片 连续推进")
     }
 
@@ -658,11 +712,11 @@ class DetectMainActivity : AppCompatActivity(),
         if (config.isManual) {
             tvMode.text = "手动"
             tvMode.setTextColor(0xFFFFB340.toInt())
-            btnMode.setBackgroundResource(R.drawable.bg_ctl_btn_manual)
+            btnMode.setBackgroundResource(R.drawable.bg_ctl_pill_manual)
         } else {
             tvMode.text = "自动"
             tvMode.setTextColor(0xFF9FB3A8.toInt())
-            btnMode.setBackgroundResource(R.drawable.bg_ctl_btn)
+            btnMode.setBackgroundResource(R.drawable.bg_ctl_pill)
         }
         // 同步开始按钮文案
         if (!engine.running) {
@@ -683,7 +737,7 @@ class DetectMainActivity : AppCompatActivity(),
                     if (e == null) {
                         isRecording = true
                         recordStartTime = System.currentTimeMillis()
-                        btnRec.setBackgroundResource(R.drawable.bg_ctl_btn_rec_on)
+                        btnRec.setBackgroundResource(R.drawable.bg_ctl_pill_rec_on)
                         tvRec.text = "停止"
                         tvRec.setTextColor(0xFFFF3B30.toInt())
                         recTimer.visibility = View.VISIBLE
@@ -699,7 +753,7 @@ class DetectMainActivity : AppCompatActivity(),
                 runOnUiThread {
                     isRecording = false
                     handler.removeCallbacks(recordTicker)
-                    btnRec.setBackgroundResource(R.drawable.bg_ctl_btn)
+                    btnRec.setBackgroundResource(R.drawable.bg_ctl_pill)
                     tvRec.text = "录制"
                     tvRec.setTextColor(0xFF9FB3A8.toInt())
                     recTimer.visibility = View.GONE
@@ -735,23 +789,24 @@ class DetectMainActivity : AppCompatActivity(),
     private fun updateTopInfo() {
         tvTopLine.text = "线路 ${config.voltageLevel} ${config.lineName}"
         tvTopTower.text = "杆塔 #${config.towerNo}"
-        tvTopMode.text = "模式 ${if (config.isManual) "手动" else "自动"}"
         tvPhase.text = config.phase
+        // 相别已由 tvPhase 展示，此处只描述串布置，避免重复
         tvStrInfo.text = if (config.isDual) {
-            "${config.phase} · 双联 ${config.side}/${config.oppSide}"
+            "双联 ${config.side}/${config.oppSide}"
         } else {
-            "${config.phase} · ${config.side}"
+            config.side
         }
-        tvEnv.text = "环境温度 ${config.temp}℃　湿度 ${config.humi}%RH　风速 ${config.wind}m/s"
-        tvKvTh.text = "电压档位 ${config.kv}kV　阈值 ${config.th}MΩ"
+        // 遥测条为单行三列（每列约 128dp），文案压缩至单行可容纳
+        tvEnv.text = "环境 ${config.temp}℃ · ${config.humi}%RH · 风 ${config.wind}m/s"
+        tvKvTh.text = "${config.kv}kV · 阈值 ${config.th}MΩ"
     }
 
     private fun updateProbeText(extending: Boolean) {
         if (extending) {
-            tvProbe.text = "探针状态 伸出·接触"
+            tvProbe.text = "探针 伸出·接触"
             tvProbe.setTextColor(0xFFFFB340.toInt())
         } else {
-            tvProbe.text = "探针状态 复位"
+            tvProbe.text = "探针 复位"
             tvProbe.setTextColor(0xFF9FB3A8.toInt())
         }
     }
@@ -760,8 +815,9 @@ class DetectMainActivity : AppCompatActivity(),
         // 信号质量 0-100%，延迟与 dBm 为估算值（SDK 仅提供质量百分比）
         val delay = (120 - signalQuality).coerceIn(5, 200)
         val dbm = signalQuality / 2 - 100
-        tvSigLine1.text = "信号延迟 ${delay}ms　信号质量 $signalQuality%"
-        tvSigLine2.text = "信号强度 ${dbm}dBm"
+        // 顶栏右侧空间有限，压缩为两行短文案
+        tvSigLine1.text = "信号 $signalQuality% · ${delay}ms"
+        tvSigLine2.text = "强度 ${dbm}dBm"
     }
 
     private fun startDotBlink(fast: Boolean) {

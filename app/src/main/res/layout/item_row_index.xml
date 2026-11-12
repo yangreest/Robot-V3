@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 双联行序号格（对应 .ridx） -->
+<!-- 双联行序号格（对应 .ridx），行高与 item_piece_dual 对齐（31dp + 3dp 间距） -->
 <TextView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/tvRowIdx"
     android:layout_width="match_parent"
-    android:layout_height="38dp"
+    android:layout_height="31dp"
+    android:layout_marginBottom="3dp"
     android:background="@drawable/bg_ridx"
     android:gravity="center"
+    android:singleLine="true"
     android:textColor="@color/dt_txt2"
     android:textSize="11sp"
     tools:text="12" />

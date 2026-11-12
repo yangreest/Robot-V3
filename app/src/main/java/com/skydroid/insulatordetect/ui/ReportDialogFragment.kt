@@ -93,11 +93,12 @@ class ReportDialogFragment : AppCompatDialogFragment() {
 
     override fun onStart() {
         super.onStart()
-        // 固定弹窗宽度 560dp（对应 .modal width）
-        dialog?.window?.setLayout(
-            (560 * resources.displayMetrics.density).toInt(),
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        )
+        // 400×640dp 横屏：宽度取屏宽 78%（上限 480dp），高度自适应且根布局可滚动，
+        // 避免原先固定 560dp 宽 + 内容约 500dp 高在 400dp 屏高上被裁切
+        val dm = resources.displayMetrics
+        val maxWidth = (480 * dm.density).toInt()
+        val width = (dm.widthPixels * 0.78f).toInt().coerceAtMost(maxWidth)
+        dialog?.window?.setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT)
     }
 
     companion object {
