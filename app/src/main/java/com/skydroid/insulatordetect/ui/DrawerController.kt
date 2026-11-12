@@ -133,7 +133,7 @@ class DrawerController(
         opened = false
         mask.animate().alpha(0f).setDuration(250).withEndAction { mask.visibility = View.GONE }.start()
         drawer.animate()
-            .translationX(470f * drawer.resources.displayMetrics.density)
+            .translationX(430f * drawer.resources.displayMetrics.density)
             .setDuration(300).start()
     }
 

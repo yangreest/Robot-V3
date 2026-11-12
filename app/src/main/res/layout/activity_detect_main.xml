@@ -1,8 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   瓷绝缘子零值检测机器人 手持终端主界面
-  布局完全参照 Robot-V3/低值零值智能研判平台.html：
-  FrameLayout 分层，子 View 顺序对应 HTML z-index 层级
+  目标设备：1200×1920px / 400×640dp（density 3.0），横屏全屏可用区域 640dp × 400dp
+
+  分区（FrameLayout 分层，子 View 顺序 = z 轴层级，自上而下）：
+    ┌──────────────────── topbar 46dp（y 0..46）────────────────────────┐
+    ├ stringPanel 240dp ┬─────── 图传视频区 x 248..632 ────────────────┤
+    │  y 44..338        │  遥测条      y  50..76                        │
+    │  相别 / 统计 /    │  水印 · REC  y  82..110                       │
+    │  绝缘子片列表     │  报警条      y 118..170（瞬态）               │
+    │                   │  浮层带      y 176..224（提示/Toast）         │
+    │                   │  曲线面板    y 219..330                       │
+    ├───────────────────┴──── bottomBar 62dp（y 338..400）─────────────┤
+    │ 手柄通道 chip 条（左 190dp） | 拍照 · 模式 · 开始 · 录制 · 急停   │
+    └──────────────────────────────────────────────────────────────────┘
+  所有可点击控件高度 ≥ 44dp；瞬态浮层（报警/Toast/白闪）置于高层级且不拦截触摸。
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
@@ -10,269 +22,232 @@
     android:layout_height="match_parent"
     android:background="#10161A">
 
-    <!-- ===== 视频背景层（对应 #videoCanvas，摄像头图传全屏显示） ===== -->
+    <!-- ===== 视频层（对应 #videoCanvas，摄像头图传全屏铺底） ===== -->
     <com.skydroid.fpvplayer.FPVWidget
         android:id="@+id/fpvWidget"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#10161A" />
+        android:background="@android:color/transparent" />
 
-    <!-- 图传水印（对应 drawVideo 中 CAM1 水印） -->
-    <TextView
-        android:id="@+id/tvWatermark"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|end"
-        android:layout_marginEnd="12dp"
-        android:layout_marginBottom="6dp"
-        android:fontFamily="monospace"
-        android:textColor="#80FFFFFF"
-        android:textSize="11sp"
-        tools:text="CAM1 · 1080P · 09:24:31" />
+    <!-- ===== 模拟图传层：无 RTSP 视频流时显示，收到首帧后自动隐藏 ===== -->
+    <FrameLayout
+        android:id="@+id/camPreviewLayer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
 
-    <!-- ===== 顶部状态栏（对应 .topbar，z:20） ===== -->
+        <ImageView
+            android:id="@+id/ivCamPreview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="模拟摄像头回传画面"
+            android:scaleType="centerCrop"
+            android:src="@drawable/cam_preview" />
+
+        <TextView
+            android:id="@+id/tvPreviewHint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|center_horizontal"
+            android:layout_marginStart="248dp"
+            android:layout_marginTop="176dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/bg_toast"
+            android:paddingStart="14dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="6dp"
+            android:text="模拟图传画面 · 未接收到 RTSP 视频流"
+            android:textColor="#FFB340"
+            android:textSize="11sp" />
+    </FrameLayout>
+
+    <!-- ===== 顶部状态栏（对应 .topbar，46dp） ===== -->
     <LinearLayout
         android:id="@+id/topbar"
         android:layout_width="match_parent"
-        android:layout_height="54dp"
+        android:layout_height="46dp"
         android:layout_gravity="top"
         android:background="@drawable/bg_topbar_gradient"
+        android:baselineAligned="false"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="10dp"
-        android:paddingEnd="10dp">
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp">
 
-        <!-- 品牌区（对应 .brand） -->
+        <!-- 品牌 Logo -->
         <ImageView
-            android:layout_width="24dp"
-            android:layout_height="24dp"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
             android:contentDescription="@string/detect_app_name"
             android:src="@drawable/ic_logo" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="9dp"
-            android:paddingStart="9dp"
-            android:paddingEnd="0dp"
-            android:text="@string/detect_app_name"
-            android:textColor="#DBE7DF"
-            android:textSize="12sp" />
-
-        <View
-            android:layout_width="1dp"
-            android:layout_height="16dp"
-            android:layout_marginStart="9dp"
-            android:background="#38FFFFFF" />
 
         <!-- 状态徽章（对应 .status-badge） -->
         <LinearLayout
             android:id="@+id/statusBadge"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
+            android:layout_marginStart="8dp"
             android:background="@drawable/bg_badge_idle"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingStart="12dp"
-            android:paddingTop="4dp"
-            android:paddingEnd="12dp"
-            android:paddingBottom="4dp">
+            android:paddingStart="10dp"
+            android:paddingTop="3dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="3dp">
 
             <View
                 android:id="@+id/statusDot"
-                android:layout_width="8dp"
-                android:layout_height="8dp"
+                android:layout_width="7dp"
+                android:layout_height="7dp"
                 android:background="@drawable/shape_dot" />
 
             <TextView
                 android:id="@+id/tvStatus"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="7dp"
+                android:layout_marginStart="6dp"
+                android:singleLine="true"
                 android:text="非检测"
                 android:textColor="@color/dt_txt"
-                android:textSize="13sp" />
+                android:textSize="12sp" />
         </LinearLayout>
 
-        <!-- 中部信息（对应 .top-mid） -->
+        <!-- 线路 / 杆塔（模式信息已下沉到底部控制条，避免与 btnMode 重复） -->
         <TextView
             android:id="@+id/tvTopLine"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="12dp"
+            android:layout_marginStart="10dp"
+            android:ellipsize="end"
+            android:maxWidth="120dp"
             android:singleLine="true"
             android:textColor="@color/dt_txt2"
             android:textSize="11.5sp"
-            tools:text="线路 750kV城苏2线" />
+            tools:text="750kV城苏2线" />
 
         <TextView
             android:id="@+id/tvTopTower"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
+            android:layout_marginStart="8dp"
             android:singleLine="true"
             android:textColor="@color/dt_txt2"
             android:textSize="11.5sp"
             tools:text="杆塔 #020" />
 
-        <TextView
-            android:id="@+id/tvTopMode"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:singleLine="true"
-            android:textColor="@color/dt_txt2"
-            android:textSize="11.5sp"
-            tools:text="模式 自动" />
-
-        <TextView
-            android:id="@+id/tvTopDone"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:singleLine="true"
-            android:textColor="@color/dt_txt2"
-            android:textSize="11.5sp"
-            tools:text="已测 0/60" />
-
-        <TextView
-            android:id="@+id/tvTopBad"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:singleLine="true"
-            android:textColor="@color/dt_txt2"
-            android:textSize="11.5sp"
-            tools:text="劣化 0" />
-
-        <!-- 右侧（对应 .top-right） -->
-        <LinearLayout
+        <!-- 弹性间隔 -->
+        <View
             android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <!-- 图传链路信号 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:gravity="end"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvSigLine1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:singleLine="true"
+                android:textColor="@color/dt_txt2"
+                android:textSize="10sp"
+                tools:text="信号 100% · 11ms" />
+
+            <TextView
+                android:id="@+id/tvSigLine2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:singleLine="true"
+                android:textColor="@color/dt_txt2"
+                android:textSize="10sp"
+                tools:text="强度 -58dBm" />
+        </LinearLayout>
+
+        <!-- 双电池（对应 .bats） -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:baselineAligned="false"
+            android:gravity="center_vertical"
             android:orientation="horizontal">
+
+            <com.skydroid.insulatordetect.ui.BatteryView
+                android:id="@+id/batRobot"
+                android:layout_width="12dp"
+                android:layout_height="18dp" />
 
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:gravity="end"
+                android:layout_marginStart="4dp"
                 android:orientation="vertical">
 
                 <TextView
-                    android:id="@+id/tvSigLine1"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="@color/dt_txt2"
-                    android:textSize="10.5sp"
-                    tools:text="信号延迟 11ms　信号质量 100%" />
+                    android:text="机器人"
+                    android:textColor="#E6FFFFFF"
+                    android:textSize="8sp" />
 
                 <TextView
-                    android:id="@+id/tvSigLine2"
+                    android:id="@+id/tvBatRobot"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="@color/dt_txt2"
+                    android:textColor="@color/white"
                     android:textSize="10.5sp"
-                    tools:text="信号强度 -58dBm" />
+                    tools:text="82%" />
             </LinearLayout>
 
-            <!-- 双电池（对应 .bats） -->
+            <View
+                android:layout_width="1dp"
+                android:layout_height="20dp"
+                android:layout_marginStart="7dp"
+                android:layout_marginEnd="7dp"
+                android:background="#3DFFFFFF" />
+
+            <com.skydroid.insulatordetect.ui.BatteryView
+                android:id="@+id/batAndroid"
+                android:layout_width="12dp"
+                android:layout_height="18dp" />
+
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="13dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingEnd="11dp"
-                tools:ignore="RtlSymmetry">
+                android:layout_marginStart="4dp"
+                android:orientation="vertical">
 
-                <LinearLayout
+                <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:text="安卓"
+                    android:textColor="#E6FFFFFF"
+                    android:textSize="8sp" />
 
-                    <com.skydroid.insulatordetect.ui.BatteryView
-                        android:id="@+id/batRobot"
-                        android:layout_width="13dp"
-                        android:layout_height="20dp" />
-
-                    <LinearLayout
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="5dp"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="机器人"
-                            android:textColor="#E6FFFFFF"
-                            android:textSize="9.5sp" />
-
-                        <TextView
-                            android:id="@+id/tvBatRobot"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:textColor="@color/white"
-                            android:textSize="11sp"
-                            tools:text="82%" />
-                    </LinearLayout>
-                </LinearLayout>
-
-                <View
-                    android:layout_width="1dp"
-                    android:layout_height="22dp"
-                    android:layout_marginStart="13dp"
-                    android:layout_marginEnd="13dp"
-                    android:background="#3DFFFFFF" />
-
-                <LinearLayout
+                <TextView
+                    android:id="@+id/tvBatAndroid"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <com.skydroid.insulatordetect.ui.BatteryView
-                        android:id="@+id/batAndroid"
-                        android:layout_width="13dp"
-                        android:layout_height="20dp" />
-
-                    <LinearLayout
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="5dp"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="安卓"
-                            android:textColor="#E6FFFFFF"
-                            android:textSize="9.5sp" />
-
-                        <TextView
-                            android:id="@+id/tvBatAndroid"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:textColor="@color/white"
-                            android:textSize="11sp"
-                            tools:text="76%" />
-                    </LinearLayout>
-                </LinearLayout>
+                    android:textColor="@color/white"
+                    android:textSize="10.5sp"
+                    tools:text="76%" />
             </LinearLayout>
-
-            <!-- ⋯ 菜单按钮（对应 .dots） -->
-            <ImageView
-                android:id="@+id/btnMenu"
-                android:layout_width="34dp"
-                android:layout_height="34dp"
-                android:background="@drawable/bg_dots"
-                android:contentDescription="菜单"
-                android:padding="8dp"
-                android:src="@drawable/ic_dots" />
         </LinearLayout>
+
+        <!-- ⋯ 菜单按钮（40dp 触控热区） -->
+        <ImageView
+            android:id="@+id/btnMenu"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_dots"
+            android:contentDescription="菜单"
+            android:padding="9dp"
+            android:src="@drawable/ic_dots" />
     </LinearLayout>
 
     <!-- 顶栏底部绿色分隔线（对应 .topbar::after） -->
@@ -280,267 +255,242 @@
         android:layout_width="match_parent"
         android:layout_height="2dp"
         android:layout_gravity="top"
-        android:layout_marginTop="52dp"
+        android:layout_marginTop="44dp"
         android:background="@color/dt_green" />
 
-    <!-- ===== 左侧绝缘子串面板（对应 .string-panel，z:15） ===== -->
+    <!-- ===== 左侧绝缘子串面板（240dp × y 44..338） ===== -->
     <LinearLayout
         android:id="@+id/stringPanel"
-        android:layout_width="278dp"
-        android:layout_height="match_parent"
-        android:layout_gravity="start"
-        android:layout_marginTop="52dp"
+        android:layout_width="240dp"
+        android:layout_height="294dp"
+        android:layout_gravity="top|start"
+        android:layout_marginTop="44dp"
         android:background="@drawable/bg_left_panel"
-        android:orientation="vertical">
+        android:orientation="vertical"
+        android:paddingStart="8dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="6dp">
 
-        <!-- 当前相别（对应 .phase-ind） -->
+        <!-- 相别 + 串布置（tvStrInfo 不再重复相别文字） -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="12dp"
-            android:layout_marginTop="10dp"
-            android:layout_marginEnd="12dp"
+            android:layout_height="26dp"
             android:background="@drawable/bg_phase_ind"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingStart="10dp"
-            android:paddingTop="6dp"
-            android:paddingEnd="10dp"
-            android:paddingBottom="6dp">
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="当前相别"
                 android:textColor="@color/dt_txt2"
-                android:textSize="12sp" />
+                android:textSize="11sp" />
 
             <TextView
                 android:id="@+id/tvPhase"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="6dp"
+                android:singleLine="true"
                 android:textColor="@color/dt_green"
-                android:textSize="14sp"
+                android:textSize="13sp"
                 android:textStyle="bold"
                 tools:text="A相" />
-        </LinearLayout>
 
-        <!-- 左串/右串 Tab（对应 .tabs.small，双联时隐藏） -->
-        <LinearLayout
-            android:id="@+id/sideTabs"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="12dp"
-            android:layout_marginTop="10dp"
-            android:layout_marginEnd="12dp"
-            android:orientation="horizontal"
-            android:visibility="gone">
-
-            <TextView
-                android:id="@+id/tabLeft"
+            <View
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:background="@drawable/bg_tab"
-                android:gravity="center"
-                android:paddingTop="4dp"
-                android:paddingBottom="4dp"
-                android:text="左串"
-                android:textColor="@color/dt_txt2"
-                android:textSize="11sp" />
-
-            <TextView
-                android:id="@+id/tabRight"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="6dp"
-                android:layout_weight="1"
-                android:background="@drawable/bg_tab"
-                android:gravity="center"
-                android:paddingTop="4dp"
-                android:paddingBottom="4dp"
-                android:text="右串"
-                android:textColor="@color/dt_txt2"
-                android:textSize="11sp" />
-        </LinearLayout>
-
-        <!-- 串信息（对应 .str-meta） -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:paddingStart="14dp"
-            android:paddingTop="6dp"
-            android:paddingEnd="14dp"
-            android:paddingBottom="4dp">
+                android:layout_height="1dp"
+                android:layout_weight="1" />
 
             <TextView
                 android:id="@+id/tvStrInfo"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxWidth="98dp"
+                android:singleLine="true"
+                android:textColor="@color/dt_txt2"
+                android:textSize="10sp"
+                tools:text="双联 左串/右串" />
+        </LinearLayout>
+
+        <!-- 统计三段：已测 / 合格 / 劣化（顶栏不再重复展示） -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="30dp"
+            android:layout_marginTop="5dp"
+            android:background="@drawable/bg_stat_cell"
+            android:baselineAligned="false"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvTopDone"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
+                android:gravity="center"
                 android:singleLine="true"
-                android:textColor="@color/dt_txt2"
+                android:textColor="@color/dt_txt3"
                 android:textSize="11sp"
-                tools:text="A相 · 双联 左串/右串" />
+                tools:text="已测 0/60" />
+
+            <View
+                android:layout_width="1dp"
+                android:layout_height="14dp"
+                android:background="#1AFFFFFF" />
 
             <TextView
                 android:id="@+id/tvOkBad"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
                 android:singleLine="true"
-                android:textColor="@color/dt_txt2"
+                android:textColor="@color/dt_green"
                 android:textSize="11sp"
-                tools:text="合格 0 · 异常 0" />
+                tools:text="合格 0" />
+
+            <View
+                android:layout_width="1dp"
+                android:layout_height="14dp"
+                android:background="#1AFFFFFF" />
+
+            <TextView
+                android:id="@+id/tvTopBad"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:singleLine="true"
+                android:textColor="@color/dt_red"
+                android:textSize="11sp"
+                tools:text="劣化 0" />
         </LinearLayout>
 
-        <!-- 绝缘子片列表（对应 .piece-list） -->
+        <!-- 绝缘子片列表（对应 .piece-list），单行 41dp / 双联行 34dp 触控高度 -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/rvPieces"
             android:layout_width="match_parent"
             android:layout_height="0dp"
+            android:layout_marginTop="5dp"
             android:layout_weight="1"
             android:clipToPadding="false"
-            android:paddingStart="10dp"
-            android:paddingTop="4dp"
-            android:paddingEnd="10dp"
-            android:paddingBottom="60dp"
+            android:paddingStart="2dp"
+            android:paddingTop="2dp"
+            android:paddingEnd="2dp"
+            android:paddingBottom="4dp"
             android:scrollbars="vertical" />
     </LinearLayout>
 
-    <!-- ===== 手柄按键/通道显示条（需求3：按了哪个按钮，界面有显示） ===== -->
-    <HorizontalScrollView
-        android:id="@+id/rcStripScroll"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|start"
-        android:layout_marginStart="294dp"
-        android:layout_marginBottom="18dp"
-        android:background="@drawable/bg_toast"
-        android:paddingStart="8dp"
-        android:paddingTop="4dp"
-        android:paddingEnd="8dp"
-        android:paddingBottom="4dp"
-        android:scrollbars="none">
-
-        <LinearLayout
-            android:id="@+id/rcStrip"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal" />
-    </HorizontalScrollView>
-
-    <!-- ===== 右上信息卡（对应 .info-card，z:14） ===== -->
+    <!-- ===== 视频区遥测条（环境 / 档位阈值 / 探针，单行三列） ===== -->
     <LinearLayout
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="end"
-        android:layout_marginTop="120dp"
-        android:layout_marginEnd="16dp"
-        android:background="@drawable/bg_info_card"
-        android:gravity="end"
-        android:orientation="vertical"
-        android:paddingStart="12dp"
-        android:paddingTop="8dp"
-        android:paddingEnd="12dp"
-        android:paddingBottom="8dp">
+        android:layout_width="match_parent"
+        android:layout_height="26dp"
+        android:layout_gravity="top|start"
+        android:layout_marginStart="248dp"
+        android:layout_marginTop="50dp"
+        android:layout_marginEnd="8dp"
+        android:background="@drawable/bg_info_strip"
+        android:baselineAligned="false"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp">
 
         <TextView
             android:id="@+id/tvEnv"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:singleLine="true"
             android:textColor="@color/dt_txt2"
-            android:textSize="12sp"
-            tools:text="环境温度 20℃　湿度 33%RH　风速 3.2m/s" />
+            android:textSize="10sp"
+            tools:text="环境 20℃ · 33%RH · 风 3.2m/s" />
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="12dp"
+            android:background="#1AFFFFFF" />
 
         <TextView
             android:id="@+id/tvKvTh"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:singleLine="true"
             android:textColor="@color/dt_txt2"
-            android:textSize="12sp"
-            tools:text="电压档位 50kV　阈值 500MΩ" />
+            android:textSize="10sp"
+            tools:text="50kV · 阈值 500MΩ" />
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="12dp"
+            android:background="#1AFFFFFF" />
 
         <TextView
             android:id="@+id/tvProbe"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:singleLine="true"
             android:textColor="@color/dt_txt2"
-            android:textSize="12sp"
-            tools:text="探针状态 复位" />
-
-        <!-- 拍照按钮（对应 .cam-btn） -->
-        <ImageView
-            android:id="@+id/btnShot"
-            android:layout_width="34dp"
-            android:layout_height="34dp"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/bg_cam_btn"
-            android:contentDescription="拍照"
-            android:padding="8dp"
-            android:src="@drawable/ic_camera" />
+            android:textSize="10sp"
+            tools:text="探针 复位" />
     </LinearLayout>
 
-    <!-- ===== 右下曲线面板（对应 .right-col/.curve-panel，z:14） ===== -->
-    <LinearLayout
-        android:layout_width="432dp"
+    <!-- ===== 图传水印（对应 drawVideo 中 CAM1 水印） ===== -->
+    <TextView
+        android:id="@+id/tvWatermark"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom|end"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="86dp"
-        android:background="@drawable/bg_curve_panel"
-        android:orientation="vertical"
-        android:paddingStart="12dp"
-        android:paddingTop="10dp"
-        android:paddingEnd="12dp"
-        android:paddingBottom="8dp">
+        android:layout_gravity="top|start"
+        android:layout_marginStart="248dp"
+        android:layout_marginTop="84dp"
+        android:fontFamily="monospace"
+        android:singleLine="true"
+        android:textColor="#80FFFFFF"
+        android:textSize="10.5sp"
+        tools:text="CAM1 · 1080P · 09:24:31" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="高压冲击响应曲线（kV）"
-            android:textColor="@color/dt_txt2"
-            android:textSize="12sp" />
-
-        <com.skydroid.insulatordetect.ui.CurveView
-            android:id="@+id/curveView"
-            android:layout_width="match_parent"
-            android:layout_height="132dp"
-            android:layout_marginTop="6dp" />
-    </LinearLayout>
-
-    <!-- ===== 录制计时器（对应 .rec-timer，z:15） ===== -->
+    <!-- ===== 录制计时器（对应 .rec-timer，仅录制时可见） ===== -->
     <LinearLayout
         android:id="@+id/recTimer"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|end"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="240dp"
+        android:layout_height="26dp"
+        android:layout_gravity="top|start"
+        android:layout_marginStart="386dp"
+        android:layout_marginTop="82dp"
         android:background="@drawable/bg_rec_timer"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="12dp"
-        android:paddingTop="5dp"
-        android:paddingEnd="12dp"
-        android:paddingBottom="5dp"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
         android:visibility="gone"
         tools:visibility="visible">
 
         <View
             android:id="@+id/recDot"
-            android:layout_width="9dp"
-            android:layout_height="9dp"
+            android:layout_width="8dp"
+            android:layout_height="8dp"
             android:background="@drawable/shape_rec_dot" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="7dp"
+            android:layout_marginStart="6dp"
             android:text="REC"
             android:textColor="@color/white"
-            android:textSize="13sp" />
+            android:textSize="11.5sp" />
 
         <TextView
             android:id="@+id/tvRecTime"
@@ -549,202 +499,273 @@
             android:layout_marginStart="5dp"
             android:text="00:00"
             android:textColor="@color/white"
-            android:textSize="13sp"
+            android:textSize="11.5sp"
             android:textStyle="bold" />
     </LinearLayout>
 
-    <!-- ===== 底部控制区（对应 .controls，z:16） ===== -->
+    <!-- ===== 报警条容器（瞬态浮层，不拦截触摸；隐藏时 translationY 上移并被容器裁剪） ===== -->
     <LinearLayout
-        android:id="@+id/controls"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="14dp"
-        android:gravity="bottom"
-        android:orientation="horizontal">
+        android:layout_gravity="top"
+        android:layout_marginStart="248dp"
+        android:layout_marginTop="118dp"
+        android:layout_marginEnd="8dp"
+        android:gravity="center_horizontal"
+        android:orientation="vertical">
 
-        <!-- 模式切换（对应 #modeBtn） -->
         <LinearLayout
+            android:id="@+id/alarmBar"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:gravity="center_horizontal"
-            android:orientation="vertical">
+            android:background="@drawable/bg_alarm_bar"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="14dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="8dp"
+            android:translationY="-90dp"
+            tools:translationY="0dp">
 
-            <FrameLayout
-                android:id="@+id/btnMode"
-                android:layout_width="52dp"
-                android:layout_height="52dp"
-                android:background="@drawable/bg_ctl_btn">
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:contentDescription="报警"
+                android:src="@drawable/ic_alarm" />
 
-                <ImageView
-                    android:id="@+id/ivMode"
-                    android:layout_width="22dp"
-                    android:layout_height="22dp"
-                    android:layout_gravity="center"
-                    android:contentDescription="切换检测模式"
-                    android:src="@drawable/ic_mode" />
-            </FrameLayout>
+            <TextView
+                android:id="@+id/tvAlarm"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="9dp"
+                android:text="发现劣化绝缘子"
+                android:textColor="@color/white"
+                android:textSize="12.5sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- ===== 右下曲线面板（240dp × y 219..330，顶边让出 y176 浮层带） ===== -->
+    <LinearLayout
+        android:layout_width="240dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="8dp"
+        android:layout_marginBottom="70dp"
+        android:background="@drawable/bg_curve_panel"
+        android:orientation="vertical"
+        android:paddingStart="10dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="10dp"
+        android:paddingBottom="6dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:singleLine="true"
+            android:text="高压冲击响应曲线（kV）"
+            android:textColor="@color/dt_txt2"
+            android:textSize="11sp" />
+
+        <com.skydroid.insulatordetect.ui.CurveView
+            android:id="@+id/curveView"
+            android:layout_width="match_parent"
+            android:layout_height="80dp"
+            android:layout_marginTop="4dp" />
+    </LinearLayout>
+
+    <!-- ===== Toast 容器（瞬态浮层，不拦截触摸；与图传提示共用 y176 浮层带，避开曲线面板） ===== -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:layout_marginStart="248dp"
+        android:layout_marginTop="176dp"
+        android:layout_marginEnd="8dp"
+        android:gravity="center_horizontal"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/customToast"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:alpha="0"
+            android:background="@drawable/bg_toast"
+            android:gravity="center"
+            android:paddingStart="16dp"
+            android:paddingTop="7dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="7dp"
+            android:textColor="@color/dt_txt"
+            android:textSize="12sp"
+            tools:alpha="1"
+            tools:text="提示消息" />
+    </LinearLayout>
+
+    <!-- ===== 底部控制条（y 338..400，全部操作按钮高度 44dp） ===== -->
+    <LinearLayout
+        android:id="@+id/bottomBar"
+        android:layout_width="match_parent"
+        android:layout_height="62dp"
+        android:layout_gravity="bottom"
+        android:background="@drawable/bg_bottom_bar"
+        android:baselineAligned="false"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp">
+
+        <!-- 手柄按键/通道显示条（需求3：按了哪个按钮，界面有显示） -->
+        <HorizontalScrollView
+            android:id="@+id/rcStripScroll"
+            android:layout_width="190dp"
+            android:layout_height="34dp"
+            android:background="@drawable/bg_stat_cell"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/rcStrip"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:gravity="center_vertical"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+
+        <!-- 弹性间隔：把操作按钮推到右侧拇指区 -->
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <!-- 拍照（图标按钮，44dp 圆形热区） -->
+        <FrameLayout
+            android:id="@+id/btnShot"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_cam_btn">
+
+            <ImageView
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_gravity="center"
+                android:contentDescription="拍照"
+                android:src="@drawable/ic_camera" />
+        </FrameLayout>
+
+        <!-- 模式切换（对应 #modeBtn，模式状态即按钮文案，顶栏不再重复） -->
+        <LinearLayout
+            android:id="@+id/btnMode"
+            android:layout_width="76dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_ctl_pill"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/ivMode"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:contentDescription="切换检测模式"
+                android:src="@drawable/ic_mode" />
 
             <TextView
                 android:id="@+id/tvMode"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
+                android:layout_marginStart="5dp"
+                android:singleLine="true"
                 android:text="自动"
                 android:textColor="@color/dt_txt2"
-                android:textSize="11sp" />
+                android:textSize="12sp" />
         </LinearLayout>
 
         <!-- 开始检测主按钮（对应 #startBtn） -->
         <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="16dp"
-            android:gravity="center_horizontal"
-            android:orientation="vertical">
+            android:id="@+id/btnStart"
+            android:layout_width="104dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_ctl_pill_main"
+            android:gravity="center"
+            android:orientation="horizontal">
 
-            <FrameLayout
-                android:id="@+id/btnStart"
-                android:layout_width="64dp"
-                android:layout_height="64dp"
-                android:background="@drawable/bg_ctl_btn_main">
-
-                <ImageView
-                    android:id="@+id/ivStart"
-                    android:layout_width="26dp"
-                    android:layout_height="26dp"
-                    android:layout_gravity="center"
-                    android:contentDescription="开始检测"
-                    android:src="@drawable/ic_play" />
-            </FrameLayout>
+            <ImageView
+                android:id="@+id/ivStart"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:contentDescription="开始检测"
+                android:src="@drawable/ic_play" />
 
             <TextView
                 android:id="@+id/tvStart"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
+                android:layout_marginStart="5dp"
+                android:singleLine="true"
                 android:text="开始检测"
                 android:textColor="@color/dt_green"
-                android:textSize="11sp" />
+                android:textSize="12sp" />
         </LinearLayout>
 
         <!-- 录制（对应 #recBtn） -->
         <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="16dp"
-            android:gravity="center_horizontal"
-            android:orientation="vertical">
+            android:id="@+id/btnRec"
+            android:layout_width="76dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_ctl_pill"
+            android:gravity="center"
+            android:orientation="horizontal">
 
-            <FrameLayout
-                android:id="@+id/btnRec"
-                android:layout_width="52dp"
-                android:layout_height="52dp"
-                android:background="@drawable/bg_ctl_btn">
-
-                <ImageView
-                    android:id="@+id/ivRec"
-                    android:layout_width="22dp"
-                    android:layout_height="22dp"
-                    android:layout_gravity="center"
-                    android:contentDescription="录制"
-                    android:src="@drawable/ic_record" />
-            </FrameLayout>
+            <ImageView
+                android:id="@+id/ivRec"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:contentDescription="录制"
+                android:src="@drawable/ic_record" />
 
             <TextView
                 android:id="@+id/tvRec"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
+                android:layout_marginStart="5dp"
+                android:singleLine="true"
                 android:text="录制"
                 android:textColor="@color/dt_txt2"
-                android:textSize="11sp" />
+                android:textSize="12sp" />
         </LinearLayout>
 
         <!-- 急停（对应 #estopBtn） -->
         <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="16dp"
-            android:gravity="center_horizontal"
-            android:orientation="vertical">
+            android:id="@+id/btnEstop"
+            android:layout_width="76dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_ctl_pill_stop"
+            android:gravity="center"
+            android:orientation="horizontal">
 
-            <FrameLayout
-                android:id="@+id/btnEstop"
-                android:layout_width="52dp"
-                android:layout_height="52dp"
-                android:background="@drawable/bg_ctl_btn_stop">
-
-                <ImageView
-                    android:layout_width="22dp"
-                    android:layout_height="22dp"
-                    android:layout_gravity="center"
-                    android:contentDescription="急停"
-                    android:src="@drawable/ic_estop" />
-            </FrameLayout>
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:contentDescription="急停"
+                android:src="@drawable/ic_estop" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
+                android:layout_marginStart="5dp"
+                android:singleLine="true"
                 android:text="急停"
                 android:textColor="@color/dt_red"
-                android:textSize="11sp" />
+                android:textSize="12sp" />
         </LinearLayout>
     </LinearLayout>
 
-    <!-- ===== 报警条（对应 .alarm-bar，z:30） ===== -->
-    <LinearLayout
-        android:id="@+id/alarmBar"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="top|center_horizontal"
-        android:layout_marginTop="64dp"
-        android:background="@drawable/bg_alarm_bar"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingStart="18dp"
-        android:paddingTop="9dp"
-        android:paddingEnd="18dp"
-        android:paddingBottom="9dp"
-        android:translationY="-90dp"
-        tools:translationY="0dp">
-
-        <ImageView
-            android:layout_width="18dp"
-            android:layout_height="18dp"
-            android:contentDescription="报警"
-            android:src="@drawable/ic_alarm" />
-
-        <TextView
-            android:id="@+id/tvAlarm"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:text="发现劣化绝缘子"
-            android:textColor="@color/white"
-            android:textSize="13sp" />
-    </LinearLayout>
-
-    <!-- ===== 自定义 Toast（对应 .toast，z:60） ===== -->
-    <TextView
-        android:id="@+id/customToast"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="110dp"
-        android:alpha="0"
-        android:background="@drawable/bg_toast"
-        android:paddingStart="20dp"
-        android:paddingTop="9dp"
-        android:paddingEnd="20dp"
-        android:paddingBottom="9dp"
-        android:textColor="@color/dt_txt"
-        android:textSize="13sp"
-        tools:alpha="1"
-        tools:text="提示消息" />
-
-    <!-- ===== 拍照白闪（对应 .flash，z:70） ===== -->
+    <!-- ===== 拍照白闪（对应 .flash，覆盖全屏最高层） ===== -->
     <View
         android:id="@+id/flashView"
         android:layout_width="match_parent"
@@ -752,7 +773,7 @@
         android:alpha="0"
         android:background="@color/white" />
 
-    <!-- ===== 右侧抽屉遮罩（对应 .drawer-mask，z:40） ===== -->
+    <!-- ===== 右侧抽屉遮罩（对应 .drawer-mask） ===== -->
     <View
         android:id="@+id/drawerMask"
         android:layout_width="match_parent"
@@ -763,15 +784,15 @@
         android:focusable="true"
         android:visibility="gone" />
 
-    <!-- ===== 右侧抽屉（对应 .drawer，z:41） ===== -->
+    <!-- ===== 右侧抽屉（对应 .drawer，400dp = 屏宽 62.5%） ===== -->
     <LinearLayout
         android:id="@+id/drawer"
-        android:layout_width="440dp"
+        android:layout_width="400dp"
         android:layout_height="match_parent"
         android:layout_gravity="end"
         android:background="@color/dt_drawer_bg"
         android:orientation="horizontal"
-        android:translationX="470dp">
+        android:translationX="430dp">
 
         <androidx.viewpager.widget.ViewPager
             android:id="@+id/drawerPager"
@@ -784,9 +805,9 @@
             android:layout_height="match_parent"
             android:background="#1AFFFFFF" />
 
-        <!-- 竖排 Tab（对应 .drawer-tabs） -->
+        <!-- 竖排 Tab（对应 .drawer-tabs，56dp 触控宽度） -->
         <LinearLayout
-            android:layout_width="52dp"
+            android:layout_width="56dp"
             android:layout_height="match_parent"
             android:orientation="vertical">
 
@@ -796,8 +817,8 @@
                 android:layout_height="wrap_content"
                 android:background="@drawable/bg_dtab"
                 android:gravity="center"
-                android:paddingTop="22dp"
-                android:paddingBottom="22dp"
+                android:paddingTop="20dp"
+                android:paddingBottom="20dp"
                 android:text="线路设置"
                 android:textColor="@color/dt_txt2"
                 android:textSize="13sp" />
@@ -808,8 +829,8 @@
                 android:layout_height="wrap_content"
                 android:background="@drawable/bg_dtab"
                 android:gravity="center"
-                android:paddingTop="22dp"
-                android:paddingBottom="22dp"
+                android:paddingTop="20dp"
+                android:paddingBottom="20dp"
                 android:text="参数配置"
                 android:textColor="@color/dt_txt2"
                 android:textSize="13sp" />
@@ -820,8 +841,8 @@
                 android:layout_height="wrap_content"
                 android:background="@drawable/bg_dtab"
                 android:gravity="center"
-                android:paddingTop="22dp"
-                android:paddingBottom="22dp"
+                android:paddingTop="20dp"
+                android:paddingBottom="20dp"
                 android:text="系统信息"
                 android:textColor="@color/dt_txt2"
                 android:textSize="13sp" />
