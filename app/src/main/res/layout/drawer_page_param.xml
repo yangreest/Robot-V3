@@ -391,12 +391,12 @@
                 android:textSize="12sp" />
         </LinearLayout>
 
-        <!-- 摄像头 IP -->
+        <!-- 摄像头 RTSP 地址（自定义摄像头需输入完整路径） -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginBottom="6dp"
-            android:text="摄像头 IP 地址"
+            android:text="摄像头 RTSP 地址"
             android:textColor="@color/dt_txt2"
             android:textSize="12sp" />
 
@@ -407,23 +407,26 @@
             android:orientation="horizontal">
 
             <EditText
-                android:id="@+id/fCamIp"
+                android:id="@+id/fCamUrl"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:background="@drawable/bg_field_input"
+                android:hint="rtsp://主机IP:端口/流路径"
                 android:importantForAutofill="no"
-                android:inputType="text"
+                android:inputType="textUri"
+                android:maxLines="1"
                 android:paddingStart="12dp"
                 android:paddingTop="9dp"
                 android:paddingEnd="12dp"
                 android:paddingBottom="9dp"
-                android:text="192.168.144.108"
+                android:text="rtsp://192.168.144.108:554/stream=0"
                 android:textColor="@color/white"
-                android:textSize="14sp" />
+                android:textColorHint="@color/dt_txt2"
+                android:textSize="13sp" />
 
             <TextView
-                android:id="@+id/btnApplyCamIp"
+                android:id="@+id/btnApplyCamUrl"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"

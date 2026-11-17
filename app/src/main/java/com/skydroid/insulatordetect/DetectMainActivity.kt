@@ -447,9 +447,9 @@ class DetectMainActivity : AppCompatActivity(),
             RCSDKManager.setMainThreadCallBack(true)
             RCSDKManager.connectToRC()
 
-            // C10Pro 相机控制（拍照/录像）
+            // C10Pro 相机控制（拍照/录像，按 RTSP 地址中的主机 IP 寻址）
             c10Pro = (PayloadManager.getUDPPayload(
-                PayloadType.C10PRO, 5000, config.camIp, 5000
+                PayloadType.C10PRO, 5000, config.camHost(), 5000
             ) as? C10Pro)?.also {
                 PayloadManager.connectPayload(it)
             }
@@ -662,7 +662,7 @@ class DetectMainActivity : AppCompatActivity(),
     }
 
     override fun onCamSourceChanged(url: String) {
-        config.camIp = url.removePrefix("rtsp://").removeSuffix(":554/stream=0")
+        config.camUrl = url
         configStore.save(config)
         rebuildFpv(url)
     }

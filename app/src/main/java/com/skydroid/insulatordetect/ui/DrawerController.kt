@@ -33,7 +33,7 @@ class DrawerController(
         /** 保存线路设置（宿主负责持久化 + 重建片列表） */
         fun onConfigSaved(cfg: DetectConfig, resetPieces: Boolean)
 
-        /** 摄像头 IP 已应用（宿主重建视频链路） */
+        /** 摄像头 RTSP 地址已应用（宿主重建视频链路） */
         fun onCamSourceChanged(url: String)
 
         /** 机器人 IP 已应用 */
@@ -250,8 +250,8 @@ class DrawerController(
         val fRetV = pageParam.findViewById<TextView>(R.id.fRetV)
         fRet.setOnSeekBarChangeListener(progressListener { p -> fRetV.text = "${p + 5} mm/s" })
 
-        pageParam.findViewById<View>(R.id.btnApplyRbtIp).setOnClickListener { applyIp(robot = true) }
-        pageParam.findViewById<View>(R.id.btnApplyCamIp).setOnClickListener { applyIp(robot = false) }
+        pageParam.findViewById<View>(R.id.btnApplyRbtIp).setOnClickListener { applyRobotIp() }
+        pageParam.findViewById<View>(R.id.btnApplyCamUrl).setOnClickListener { applyCamUrl() }
 
         pageParam.findViewById<View>(R.id.btnOtaDet).setOnClickListener { runOta(det = true) }
         pageParam.findViewById<View>(R.id.btnOtaMain).setOnClickListener { runOta(det = false) }
@@ -274,24 +274,45 @@ class DrawerController(
         callback.showToast("参数已下发：电机 ${cfg.motor}mm/s · 探针 伸${cfg.ext}/复${cfg.ret} mm/s")
     }
 
-    /** IP 应用（对应 HTML applyIp：格式校验 + 重连提示） */
-    private fun applyIp(robot: Boolean) {
-        val input = pageParam.findViewById<EditText>(if (robot) R.id.fRbtIp else R.id.fCamIp)
-        val btn = pageParam.findViewById<TextView>(if (robot) R.id.btnApplyRbtIp else R.id.btnApplyCamIp)
-        val label = if (robot) "机器人" else "摄像头"
+    /** 机器人 IP 应用（格式校验 + 重连提示） */
+    private fun applyRobotIp() {
+        val input = pageParam.findViewById<EditText>(R.id.fRbtIp)
+        val btn = pageParam.findViewById<TextView>(R.id.btnApplyRbtIp)
         val v = input.text.toString().trim()
         val ok = Regex("^(\\d{1,3}\\.){3}\\d{1,3}$").matches(v) &&
                 v.split(".").all { (it.toIntOrNull() ?: 256) <= 255 }
         if (!ok) {
-            callback.showToast("$label IP 格式不正确，请检查")
+            callback.showToast("机器人 IP 格式不正确，请检查")
             return
         }
         btn.text = "重连中…"
-        callback.showToast("$label IP 已修改为 $v，链路重连中…")
+        callback.showToast("机器人 IP 已修改为 $v，链路重连中…")
         val task = Runnable {
             btn.text = "已应用"
-            if (robot) callback.onRobotIpChanged(v) else callback.onCamSourceChanged("rtsp://$v:554/stream=0")
-            callback.showToast("$label（$v）链路重连成功")
+            callback.onRobotIpChanged(v)
+            callback.showToast("机器人（$v）链路重连成功")
+        }
+        otaTasks.add(task)
+        handler.postDelayed(task, 1400)
+    }
+
+    /** 摄像头 RTSP 地址应用（自定义摄像头需输入完整 rtsp:// 路径） */
+    private fun applyCamUrl() {
+        val input = pageParam.findViewById<EditText>(R.id.fCamUrl)
+        val btn = pageParam.findViewById<TextView>(R.id.btnApplyCamUrl)
+        val v = input.text.toString().trim()
+        // 校验：rtsp:// 前缀 + 非空主机（可带端口与任意流路径）
+        val ok = Regex("^rtsp://[^\\s/]+(:\\d+)?(/[^\\s]*)?$").matches(v)
+        if (!ok) {
+            callback.showToast("RTSP 地址格式不正确，例：rtsp://192.168.144.108:554/stream=0")
+            return
+        }
+        btn.text = "重连中…"
+        callback.showToast("摄像头地址已修改，视频链路重连中…")
+        val task = Runnable {
+            btn.text = "已应用"
+            callback.onCamSourceChanged(v)
+            callback.showToast("摄像头（$v）链路重连成功")
         }
         otaTasks.add(task)
         handler.postDelayed(task, 1400)
@@ -401,11 +422,11 @@ class DrawerController(
         fRet.progress = (cfg.ret - 5).coerceIn(0, 95)
         pageParam.findViewById<TextView>(R.id.fRetV).text = "${cfg.ret} mm/s"
         pageParam.findViewById<EditText>(R.id.fRbtIp).setText(cfg.rbtIp)
-        pageParam.findViewById<EditText>(R.id.fCamIp).setText(cfg.camIp)
+        pageParam.findViewById<EditText>(R.id.fCamUrl).setText(cfg.rtspUrl())
 
         // 系统信息页
         pageSys.findViewById<TextView>(R.id.sysRbtIp).text = cfg.rbtIp
-        pageSys.findViewById<TextView>(R.id.sysCamIp).text = cfg.camIp
+        pageSys.findViewById<TextView>(R.id.sysCamUrl).text = cfg.rtspUrl()
         pageSys.findViewById<TextView>(R.id.sysMotion).text = "${cfg.motor}mm/s"
         pageSys.findViewById<TextView>(R.id.sysMainFw).text = "V${mainFw.joinToString(".")}（2026-09-10）"
         pageSys.findViewById<TextView>(R.id.sysDetFw).text = "V${detFw.joinToString(".")}"
