@@ -329,9 +329,23 @@ class DetectMainActivity : AppCompatActivity(),
     private fun initRecyclerView() {
         adapter = PieceAdapter(engine.pieces, config.isDual) { index -> engine.jumpTo(index) }
         rvPieces.layoutManager =
-            if (config.isDual) GridLayoutManager(this, 3) else LinearLayoutManager(this)
+            if (config.isDual) newDualLayoutManager() else LinearLayoutManager(this)
         rvPieces.adapter = adapter
         engine.resetPieces()
+    }
+
+    /**
+     * 双联网格布局：100 span 细分宽度（rv 内容宽固定 220dp，1 span = 2.2dp）。
+     * 行序号列仅占 10 span ≈ 22dp（11sp 下刚好容纳 3 位数），
+     * 左/右串片格各占 45 span ≈ 99dp，把序号列让出的宽度还给数据列。
+     */
+    private fun newDualLayoutManager(): GridLayoutManager {
+        return GridLayoutManager(this, 100).apply {
+            spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+                override fun getSpanSize(position: Int): Int =
+                    if (position % 3 == 0) 10 else 45
+            }
+        }
     }
 
     /** 动态生成手柄通道 chip（需求3：按了哪个按钮，界面有显示） */
@@ -506,7 +520,7 @@ class DetectMainActivity : AppCompatActivity(),
         runOnUiThread {
             adapter.setDualMode(config.isDual)
             rvPieces.layoutManager =
-                if (config.isDual) GridLayoutManager(this, 3) else LinearLayoutManager(this)
+                if (config.isDual) newDualLayoutManager() else LinearLayoutManager(this)
             adapter.notifyDataSetChanged()
         }
     }

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 双联行序号格（对应 .ridx），行高与 item_piece_dual 对齐（31dp + 3dp 间距） -->
+<!-- 双联行序号格（对应 .ridx），列宽由网格分配约 22dp（刚好 3 位数），行高与 item_piece_dual 对齐（31dp + 3dp 间距） -->
 <TextView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/tvRowIdx"

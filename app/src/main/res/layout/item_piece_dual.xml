@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   绝缘子片列表项-双联（对应 .piece-list.dual .piece，紧凑样式，无序号列）
-  240dp 面板下 3 列网格每格约 73dp，行高 34dp
+  240dp 面板下左/右串格约 99dp（行序号列约 22dp），行高 34dp
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"

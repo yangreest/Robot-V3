@@ -6,7 +6,7 @@
   分区（FrameLayout 分层，子 View 顺序 = z 轴层级，自上而下）：
     ┌──────────────────── topbar 46dp（y 0..46）────────────────────────┐
     ├ stringPanel 240dp ┬─────── 图传视频区 x 248..632 ────────────────┤
-    │  y 44..338        │  遥测条      y  50..76                        │
+    │  y 44..底部       │  遥测条      y  50..76                        │
     │  相别 / 统计 /    │  水印 · REC  y  82..110                       │
     │  绝缘子片列表     │  报警条      y 118..170（瞬态）               │
     │                   │  浮层带      y 176..224（提示/Toast）         │
@@ -258,11 +258,11 @@
         android:layout_marginTop="44dp"
         android:background="@color/dt_green" />
 
-    <!-- ===== 左侧绝缘子串面板（240dp × y 44..338） ===== -->
+    <!-- ===== 左侧绝缘子串面板（240dp × y 44..底部，延伸至根布局下边界） ===== -->
     <LinearLayout
         android:id="@+id/stringPanel"
         android:layout_width="240dp"
-        android:layout_height="294dp"
+        android:layout_height="match_parent"
         android:layout_gravity="top|start"
         android:layout_marginTop="44dp"
         android:background="@drawable/bg_left_panel"
