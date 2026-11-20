@@ -22,44 +22,43 @@
     android:layout_height="match_parent"
     android:background="#10161A">
 
-    <!-- ===== 视频层（对应 #videoCanvas，摄像头图传全屏铺底） ===== -->
-    <com.skydroid.fpvplayer.FPVWidget
-        android:id="@+id/fpvWidget"
+    <!-- ===== 视频层（对应 #videoCanvas，摄像头图传全屏铺底，EasyPlayerClient 渲染画布） ===== -->
+    <TextureView
+        android:id="@+id/rtspTexture"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@android:color/transparent" />
+        android:layout_height="match_parent" />
 
     <!-- ===== 模拟图传层：无 RTSP 视频流时显示，收到首帧后自动隐藏 ===== -->
-    <FrameLayout
-        android:id="@+id/camPreviewLayer"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent">
+<!--    <FrameLayout-->
+<!--        android:id="@+id/camPreviewLayer"-->
+<!--        android:layout_width="match_parent"-->
+<!--        android:layout_height="match_parent">-->
 
-        <ImageView
-            android:id="@+id/ivCamPreview"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:contentDescription="模拟摄像头回传画面"
-            android:scaleType="centerCrop"
-            android:src="@drawable/cam_preview" />
+<!--&lt;!&ndash;        <ImageView&ndash;&gt;-->
+<!--&lt;!&ndash;            android:id="@+id/ivCamPreview"&ndash;&gt;-->
+<!--&lt;!&ndash;            android:layout_width="match_parent"&ndash;&gt;-->
+<!--&lt;!&ndash;            android:layout_height="match_parent"&ndash;&gt;-->
+<!--&lt;!&ndash;            android:contentDescription="模拟摄像头回传画面"&ndash;&gt;-->
+<!--&lt;!&ndash;            android:scaleType="centerCrop"&ndash;&gt;-->
+<!--&lt;!&ndash;            android:src="@drawable/cam_preview" />&ndash;&gt;-->
 
-        <TextView
-            android:id="@+id/tvPreviewHint"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="top|center_horizontal"
-            android:layout_marginStart="248dp"
-            android:layout_marginTop="176dp"
-            android:layout_marginEnd="8dp"
-            android:background="@drawable/bg_toast"
-            android:paddingStart="14dp"
-            android:paddingTop="6dp"
-            android:paddingEnd="14dp"
-            android:paddingBottom="6dp"
-            android:text="模拟图传画面 · 未接收到 RTSP 视频流"
-            android:textColor="#FFB340"
-            android:textSize="11sp" />
-    </FrameLayout>
+<!--        <TextView-->
+<!--            android:id="@+id/tvPreviewHint"-->
+<!--            android:layout_width="wrap_content"-->
+<!--            android:layout_height="wrap_content"-->
+<!--            android:layout_gravity="top|center_horizontal"-->
+<!--            android:layout_marginStart="248dp"-->
+<!--            android:layout_marginTop="176dp"-->
+<!--            android:layout_marginEnd="8dp"-->
+<!--            android:background="@drawable/bg_toast"-->
+<!--            android:paddingStart="14dp"-->
+<!--            android:paddingTop="6dp"-->
+<!--            android:paddingEnd="14dp"-->
+<!--            android:paddingBottom="6dp"-->
+<!--            android:text="模拟图传画面 · 未接收到 RTSP 视频流"-->
+<!--            android:textColor="#FFB340"-->
+<!--            android:textSize="11sp" />-->
+<!--    </FrameLayout>-->
 
     <!-- ===== 顶部状态栏（对应 .topbar，46dp） ===== -->
     <LinearLayout
@@ -608,7 +607,6 @@
         android:layout_width="match_parent"
         android:layout_height="62dp"
         android:layout_gravity="bottom"
-        android:background="@drawable/bg_bottom_bar"
         android:baselineAligned="false"
         android:gravity="center_vertical"
         android:orientation="horizontal"
@@ -623,6 +621,7 @@
             android:background="@drawable/bg_stat_cell"
             android:paddingStart="4dp"
             android:paddingEnd="4dp"
+            android:visibility="gone"
             android:scrollbars="none">
 
             <LinearLayout

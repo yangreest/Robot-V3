@@ -52,8 +52,6 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.4.0'
     implementation(name: 'rcsdk-v1.9.2', ext: 'aar')
     implementation(name: 'h16_airlink', ext: 'aar')
-    // 视频播放（摄像头图传显示）
-    implementation(name: 'fpvplayer-v3.3.9', ext: 'aar')
-    implementation(name: 'sky-ijkplayer-v1.1', ext: 'aar')
-    implementation files("libs/isoparser-1.1.9.jar")
+    // 视频播放（摄像头图传显示）：EasyPlayer RTSP 库，替代原 fpvplayer/sky-ijkplayer
+    implementation project(':library')
 }

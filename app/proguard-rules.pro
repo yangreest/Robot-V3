@@ -19,3 +19,14 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# EasyPlayer RTSP 库：JNI 反向回调的静态方法/内部类必须保留（开启 minify 时生效）
+-keep class org.easydarwin.video.Client { *; }
+-keep class org.easydarwin.video.Client$* { *; }
+-keep class org.easydarwin.video.EasyPlayerClient { *; }
+-keep class org.easydarwin.video.EasyPlayerClient$* { *; }
+-keep class org.easydarwin.sw.JNIUtil { *; }
+-keep class org.easydarwin.video.VideoCodec { *; }
+-keep class org.easydarwin.video.VideoCodec$* { *; }
+-keep class org.easydarwin.audio.AudioCodec { *; }
+-keep class org.easydarwin.audio.AudioCodec$* { *; }

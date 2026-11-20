@@ -17,3 +17,5 @@ dependencyResolutionManagement {
 }
 rootProject.name = "InsulatorDetect"
 include ':app'
+// EasyPlayer RTSP 播放库（摄像头图传显示，替代原 fpvplayer）
+include ':library'

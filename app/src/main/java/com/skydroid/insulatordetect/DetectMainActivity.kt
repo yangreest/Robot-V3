@@ -9,7 +9,9 @@ import android.os.BatteryManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.ResultReceiver
 import android.util.Log
+import android.view.TextureView
 import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -18,11 +20,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.skydroid.fpvplayer.FPVWidget
-import com.skydroid.fpvplayer.OnPlayerStateListener
-import com.skydroid.fpvplayer.PlayerType
-import com.skydroid.fpvplayer.RtspTransport
-import com.skydroid.fpvplayer.ffmpeg.FrameInfo
 import com.skydroid.rcsdk.KeyManager
 import com.skydroid.rcsdk.PayloadManager
 import com.skydroid.rcsdk.RCSDKManager
@@ -54,6 +51,7 @@ import com.skydroid.insulatordetect.ui.DrawerController
 import com.skydroid.insulatordetect.ui.PieceAdapter
 import com.skydroid.insulatordetect.ui.ReportDialogFragment
 import com.skydroid.insulatordetect.util.DpUtils
+import org.easydarwin.video.EasyPlayerClient
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -91,10 +89,22 @@ class DetectMainActivity : AppCompatActivity(),
     private val rcMonitor = RCInputMonitor()
 
     /* ==================== 视频 ==================== */
-    private var fpvWidget: FPVWidget? = null
+    private var rtspPlayer: EasyPlayerClient? = null
+    private lateinit var rtspTexture: TextureView
 
-    /** 模拟图传层：无 RTSP 视频流时显示，收到图传后隐藏 */
-    private lateinit var camPreviewLayer: View
+    /** 播放事件回调（code：1连接中 3已连接 4失败 6断流 7重连中 9超时 10退出；900分辨率 902首帧） */
+    private val playerReceiver = object : ResultReceiver(Handler(Looper.getMainLooper())) {
+        override fun onReceiveResult(resultCode: Int, resultData: Bundle?) {
+            val code = resultData?.getInt("code") ?: return
+            val msg = resultData.getString("msg") ?: ""
+            when (code) {
+                3 -> Log.i(TAG, "摄像头流已连接: $msg")
+                4, 6, 9, 10 -> Log.w(TAG, "摄像头流异常(code=$code): $msg")
+                902 -> Log.i(TAG, "视频首帧: $msg")
+                else -> Log.d(TAG, "播放事件 code=$code: $msg")
+            }
+        }
+    }
 
     /* ==================== UI ==================== */
     private val handler = Handler(Looper.getMainLooper())
@@ -227,7 +237,7 @@ class DetectMainActivity : AppCompatActivity(),
         initRecyclerView()
         initChannelChips()
         initDrawer()
-        initFpv()
+        initRtsp()
         initSdk()
         bindControls()
         updateTopInfo()
@@ -294,7 +304,6 @@ class DetectMainActivity : AppCompatActivity(),
         tvBatRobot = findViewById(R.id.tvBatRobot)
         tvBatAndroid = findViewById(R.id.tvBatAndroid)
         tvWatermark = findViewById(R.id.tvWatermark)
-        camPreviewLayer = findViewById(R.id.camPreviewLayer)
         tvPhase = findViewById(R.id.tvPhase)
         tvStrInfo = findViewById(R.id.tvStrInfo)
         tvOkBad = findViewById(R.id.tvOkBad)
@@ -336,14 +345,22 @@ class DetectMainActivity : AppCompatActivity(),
 
     /**
      * 双联网格布局：100 span 细分宽度（rv 内容宽固定 220dp，1 span = 2.2dp）。
-     * 行序号列仅占 10 span ≈ 22dp（11sp 下刚好容纳 3 位数），
-     * 左/右串片格各占 45 span ≈ 99dp，把序号列让出的宽度还给数据列。
+     * 行序号列 10 span ≈ 22dp（11sp 下刚好容纳 3 位数）；
+     * 左/右串片格各 43 span ≈ 95dp，列间显式留 2 span ≈ 4dp 间隔
+     * （span 排布：序号 0..10 | 隔 2 | 左 12..55 | 隔 2 | 右 57..100）。
      */
     private fun newDualLayoutManager(): GridLayoutManager {
         return GridLayoutManager(this, 100).apply {
             spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
                 override fun getSpanSize(position: Int): Int =
-                    if (position % 3 == 0) 10 else 45
+                    if (position % 3 == 0) 10 else 43
+
+                override fun getSpanIndex(position: Int, spanCount: Int): Int =
+                    when (position % 3) {
+                        0 -> 0
+                        1 -> 12
+                        else -> 57
+                    }
             }
         }
     }
@@ -376,47 +393,23 @@ class DetectMainActivity : AppCompatActivity(),
         findViewById<View>(R.id.btnMenu).setOnClickListener { drawerController.open() }
     }
 
-    /** 装配 FPVWidget（对应 HTML #videoCanvas，配置同 fpv-player-demo） */
-    private fun initFpv() {
-        fpvWidget = findViewById<FPVWidget>(R.id.fpvWidget).apply {
-            usingMediaCodec = true
-            url = config.rtspUrl()
-            playerType = PlayerType.ONLY_SKY
-            rtspTranstype = RtspTransport.AUTO
-            try {
-                rcType = RCSDKUtils.getDeviceType().value
-            } catch (_: Exception) { /* SDK 未初始化时忽略 */ }
-            // 图传接通后收起模拟画面层，断流时恢复，便于无相机情况下评估界面效果
-            onPlayerStateListener = object : OnPlayerStateListener {
-                override fun onConnected() {
-                    showCamPreview(false)
-                }
+    /** 装配 EasyPlayerClient（对应 HTML #videoCanvas，TextureView 渲染，硬解失败自动降级软解） */
+    private fun initRtsp() {
+        rtspTexture = findViewById(R.id.rtspTexture)
+        startRtsp(config.rtspUrl())
+    }
 
-                override fun onDisconnect() {
-                    showCamPreview(true)
-                }
-
-                override fun onReadFrame(info: FrameInfo?) {
-                    showCamPreview(false)
-                }
-            }
-            start()
+    /** 启动播放；EasyPlayerClient 内部绑定 Activity 生命周期，自动 pause/resume/stop 与断流重连 */
+    private fun startRtsp(url: String) {
+        rtspPlayer?.stop()
+        rtspPlayer = EasyPlayerClient(this, rtspTexture, false, playerReceiver).apply {
+            play(url)
         }
     }
 
-    /** 切换模拟图传层显隐（回调可能来自解码线程，统一切回主线程） */
-    private fun showCamPreview(show: Boolean) {
-        val target = if (show) View.VISIBLE else View.GONE
-        if (camPreviewLayer.visibility == target) return
-        runOnUiThread { camPreviewLayer.visibility = target }
-    }
-
-    /** 重建视频链路（摄像头 IP 修改后调用） */
-    private fun rebuildFpv(url: String) {
-        showCamPreview(true)
-        fpvWidget?.stop()
-        fpvWidget?.url = url
-        fpvWidget?.start()
+    /** 重建视频链路（摄像头地址修改后调用） */
+    private fun rebuildRtsp(url: String) {
+        startRtsp(url)
     }
 
     /** SDK 初始化（参照 HomeActivity 模式） */
@@ -678,7 +671,7 @@ class DetectMainActivity : AppCompatActivity(),
     override fun onCamSourceChanged(url: String) {
         config.camUrl = url
         configStore.save(config)
-        rebuildFpv(url)
+        rebuildRtsp(url)
     }
 
     override fun onRobotIpChanged(ip: String) {
@@ -922,7 +915,7 @@ class DetectMainActivity : AppCompatActivity(),
         }
 
         // 视频
-        fpvWidget?.stop()
+        rtspPlayer?.stop()
 
         // 遥控器
         try { RCSDKManager.disconnectRC() } catch (_: Exception) {}
