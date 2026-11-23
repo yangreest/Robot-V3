@@ -7,13 +7,16 @@ import android.os.Looper
 import android.text.TextUtils
 import android.util.Log
 import android.view.View
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.RadioGroup
 import android.widget.ScrollView
+import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.MutableLiveData
 import com.skydroid.rcsdk.*
@@ -35,6 +38,10 @@ import com.skydroid.rcsdk.utils.RCSDKUtils
 import com.skydroid.insulatordetect.other.AppUtils
 import com.skydroid.insulatordetect.other.EnumInfoKey
 import com.skydroid.insulatordetect.other.ReceiveInfo
+import com.skydroid.insulatordetect.protocol.CalibAnswer
+import com.skydroid.insulatordetect.protocol.ControlBoardConfig
+import com.skydroid.insulatordetect.protocol.DeviceHeartBeat
+import com.skydroid.insulatordetect.protocol.WHSDControlBoardProtocol
 import java.util.*
 
 /**
@@ -97,6 +104,48 @@ class HomeActivity: AppCompatActivity() {
             loopHandler.postDelayed(this, loopInterval())
         }
     }
+
+    /* ==================== 控制模块协议调试（V1.20） ==================== */
+    private val protocol = WHSDControlBoardProtocol()
+    private var heartbeating = false
+    private var btnProtoHeartbeat: Button? = null
+    private var tvProtoState: TextView? = null
+    private var tvOtaState: TextView? = null
+    private var spMotorGroup: Spinner? = null
+    private var spMotorAction: Spinner? = null
+
+    /** 电机组下拉选项 → 协议组号（文档支柱旋转组号误写为0x06，按故障反馈编号推定0x08） */
+    private val motorGroupCodes = intArrayOf(0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08)
+    private val motorActionCodes = intArrayOf(0x00, 0x01, 0x02, 0x03, 0x04)
+
+    // OTA 升级状态机：进入应答后逐包发送，500ms 无 ACK 重发，连续 6 次失败退出
+    private var otaChunks: List<ByteArray> = emptyList()
+    private var otaIndex = 0
+    private var otaErrors = 0
+    private var otaActive = false
+    private var otaWaitingEnter = false
+    private val otaTimeoutRunnable = Runnable {
+        if (!otaActive) return@Runnable
+        if (++otaErrors > 5) {
+            otaActive = false
+            appendLog("OTA", "连续 6 包无 ACK，升级失败，退出 OTA")
+            updateOtaState("升级失败(无ACK)")
+            sendProto(WHSDControlBoardProtocol.exitOtaMode())
+        } else {
+            sendOtaPack()
+        }
+    }
+    private val otaFilePicker = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri ?: return@registerForActivityResult
+        val bytes = runCatching {
+            contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        }.getOrNull()
+        if (bytes == null || bytes.isEmpty()) {
+            toast("固件文件读取失败")
+            return@registerForActivityResult
+        }
+        startOta(bytes)
+    }
     // TODO 注意:
     // TODO 使用时,请确保其他应用(包含助手、地面站)处于停止关闭状态,避免端口占用导致数据链路失败;
     // TODO 获取摇杆杆量值,无法主动上报,请求一次获取一次,推荐至少100ms读取一次;
@@ -107,6 +156,7 @@ class HomeActivity: AppCompatActivity() {
         tvInfo = findViewById(R.id.tv_info)
         etData = findViewById(R.id.et_data)
         bindLinkViews()
+        initProtocol()
         infoLiveData.observe(this) { str -> tvInfo?.text = str }
         // TODO 初始化SDK,初始化一次即可;
         RCSDKManager.initSDK(this, object : SDKManagerCallBack {
@@ -148,6 +198,7 @@ class HomeActivity: AppCompatActivity() {
             PayloadManager.connectPayload(it)
         }
         initTestView()
+        initProtocolTestView()
         setTitle("RCSDK_Demo_V${RCSDKUtils.getVersion()}  Device:${RCSDKUtils.getDeviceType()}")
         val rg_data = findViewById<RadioGroup>(R.id.rg_data)
         rg_data?.setOnCheckedChangeListener { group, checkedId ->
@@ -533,6 +584,7 @@ class HomeActivity: AppCompatActivity() {
         }
         p.onCommListener = getCommListener(0, "数传管道")
         pipeline = p
+        protocol.resetBuffer()
         appendLog("SYS", "创建管道 ${describe(p)}，发起连接…")
         PipelineManager.connectPipeline(p)
         updateLinkState()
@@ -555,6 +607,7 @@ class HomeActivity: AppCompatActivity() {
 
     private fun disconnectLink() {
         stopLoop()
+        stopProtocolSession()
         val p = pipeline ?: return
         pipeline = null
         linkConnected = false
@@ -577,6 +630,8 @@ class HomeActivity: AppCompatActivity() {
         rxBytes += bytes.size
         appendLog("RX", "${bytes.size}B  ${formatData(bytes)}")
         updateStats()
+        // 控制模块协议解析（粘包/半包内部缓冲），解析结果经 Listener 追加日志
+        protocol.feed(bytes)
     }
 
     /** 按当前 TXT/HEX 开关发送输入框内容 */
@@ -651,6 +706,393 @@ class HomeActivity: AppCompatActivity() {
         runOnUiThread { tvLinkState?.text = "机型:${deviceName()}  管道:$desc  状态:$state" }
     }
 
+    // =========================================================================
+    //  控制模块协议调试（V1.20）：组帧经数传管道发送，应答解析追加日志
+    // =========================================================================
+
+    private fun initProtocol() {
+        // 发送出口：写入当前数传管道并记 TX 日志（心跳线程也会经此发送）
+        protocol.setSender { frame ->
+            val p = pipeline ?: return@setSender
+            runCatching { p.writeData(frame) }
+                .onSuccess {
+                    txFrames++
+                    txBytes += frame.size
+                    appendLog("TX", "${frame.size}B  ${WHSDControlBoardProtocol.toHex(frame)}")
+                    updateStats()
+                }
+                .onFailure { appendLog("ERR", "协议帧发送失败：$it") }
+        }
+        protocol.setListener(object : WHSDControlBoardProtocol.Listener {
+            override fun onHeartBeat(hb: DeviceHeartBeat) {
+                // 心跳 200ms 一次，只刷状态栏不刷日志，避免淹没其他信息
+                runOnUiThread {
+                    tvProtoState?.text = "心跳:电量${hb.battery}% 电源${if (hb.mainPower == 1) "开" else "关"} " +
+                            "固件${hb.firmwareText()}\n射线机状态${hb.xRayStatus} 编码器${hb.encoderAngle}" +
+                            if (hb.factoryMode) " [工程模式]" else ""
+                }
+            }
+
+            override fun onCommandAck(cmd: Int, value: Int) {
+                appendLog("ACK", "指令0x%02X 应答%d".format(cmd, value))
+            }
+
+            override fun onMotorFault(motorType: Int, motorIndex: Int, status: Int) {
+                appendLog("FAULT", "电机类型$motorType ${motorIndex}号 ${if (status == 1) "故障" else "正常"}")
+            }
+
+            override fun onDeviceLog(log: String) {
+                appendLog("LOG", log)
+            }
+
+            override fun onRelayState(on: Boolean) {
+                appendLog("RELAY", "继电器反馈：${if (on) "开" else "关"}")
+            }
+
+            override fun onOtaEnterAck(result: Int) {
+                appendLog("OTA", "进入应答 $result（0失败 1成功继续心跳 2成功暂停心跳）")
+                runOnUiThread {
+                    if (otaWaitingEnter) {
+                        otaWaitingEnter = false
+                        if (result > 0) {
+                            otaActive = true
+                            otaIndex = 0
+                            otaErrors = 0
+                            sendOtaPack()
+                        } else {
+                            updateOtaState("进入失败")
+                        }
+                    }
+                }
+            }
+
+            override fun onOtaPackAck(result: Int, packIndex: Long) {
+                runOnUiThread {
+                    if (!otaActive) return@runOnUiThread
+                    // 仅当 ACK 序号与当前已发包一致才推进，避免旧/乱序应答误发下一包
+                    if (result > 0 && packIndex.toInt() == otaIndex + 1) {
+                        loopHandler.removeCallbacks(otaTimeoutRunnable)
+                        otaErrors = 0
+                        otaIndex++
+                        if (otaIndex >= otaChunks.size) {
+                            otaActive = false
+                            appendLog("OTA", "全部 ${otaChunks.size} 包发送完成，退出 OTA 等待升级结果")
+                            updateOtaState("发送完成,等升级结果")
+                            sendProto(WHSDControlBoardProtocol.exitOtaMode())
+                        } else {
+                            sendOtaPack()
+                        }
+                    }
+                }
+            }
+
+            override fun onOtaExitAck(result: Int) {
+                appendLog("OTA", "升级结果：${if (result == 1) "成功" else "失败"}")
+                updateOtaState(if (result == 1) "升级成功" else "升级失败")
+            }
+
+            override fun onZeroValue(megaOhm: Float) {
+                appendLog("X值", "%.3f MΩ".format(megaOhm))
+            }
+
+            override fun onSensorData(data: WHSDControlBoardProtocol.SensorData) {
+                val desc = when (data.cmd) {
+                    WHSDControlBoardProtocol.SENSOR_CMD_STATUS ->
+                        "设备状态:" + when (data.value) { 0 -> "待机"; 1 -> "触发"; 2 -> "触发完成"; 3 -> "未找到设备"; else -> "${data.value}" }
+                    WHSDControlBoardProtocol.SENSOR_CMD_BATTERY -> "电池电量:${data.value}%"
+                    WHSDControlBoardProtocol.SENSOR_CMD_RESULT ->
+                        "检测结果:" + when (data.value) { 0 -> "零值"; 1 -> "正常"; 2 -> "未知"; 3 -> "未找到设备"; else -> "${data.value}" }
+                    else -> "子命令${data.cmd} 值${data.value}"
+                }
+                appendLog("SENSOR", "传感器${data.sensorIndex} $desc")
+            }
+
+            override fun onSensorBattery(sensorIndex: Int, percent: Int) {
+                appendLog("SENSOR", "传感器$sensorIndex 电量反馈 $percent%")
+            }
+
+            override fun onSensorStatus(sensorIndex: Int, status: Int) {
+                appendLog("SENSOR", "传感器$sensorIndex 状态反馈 $status（0待机 1触发 2完成）")
+            }
+
+            override fun onSensorRawValue(sensorIndex: Int, value: ByteArray) {
+                appendLog("SENSOR", "传感器$sensorIndex 数值 ${WHSDControlBoardProtocol.toHex(value)}")
+            }
+
+            override fun onCalibAnswer(a: CalibAnswer) {
+                val detail = if (a.isKAnswer()) {
+                    "K=%.3f".format(a.k)
+                } else {
+                    "参数1=%.3f 参数2=%.3f（物理值）".format(a.value1Physical(), a.value2Physical())
+                }
+                appendLog("CALIB", "子命令0x%02X %s 原因0x%02X %s".format(
+                    a.subCmd, if (a.isSuccess) "成功" else "失败", a.reason, detail))
+            }
+
+            override fun onSampleVoltage(f: WHSDControlBoardProtocol.SampleVoltageFrame) {
+                if (f.isSuccess) {
+                    appendLog("SAMPLE", "第${f.group}组 总点数${f.totalPoints} 起始${f.startIndex} " +
+                            "本帧${f.voltagesMv.size}点(mV):${f.voltagesMv.take(8).joinToString()}")
+                } else {
+                    appendLog("SAMPLE", "第${f.group}组 失败 原因0x%02X".format(f.reason))
+                }
+            }
+
+            override fun onAutoWalkAnswer(a: WHSDControlBoardProtocol.AutoWalkAnswer) {
+                appendLog("WALK", "子命令0x%02X %s 继续行走%dms 超时退出%dms".format(
+                    a.subCmd, if (a.isSuccess) "成功" else "失败", a.continueWalkMs, a.timeoutExitMs))
+            }
+
+            override fun onServoArrival(f: WHSDControlBoardProtocol.ServoArrivalFeedback) {
+                appendLog("SERVO", "到位反馈:${if (f.result == 1) "正常" else "超时"} " +
+                        "目标${f.targetPos}步 实际${f.actualPos}步 " +
+                        "(%.1f°) %s".format(WHSDControlBoardProtocol.ServoArrivalFeedback.stepsToAngle(f.actualPos),
+                            if (f.isArrived) "已到位" else "未到位"))
+            }
+        })
+    }
+
+    private fun initProtocolTestView() {
+        btnProtoHeartbeat = findViewById(R.id.btn_proto_heartbeat)
+        tvProtoState = findViewById(R.id.tv_proto_state)
+        tvOtaState = findViewById(R.id.tv_ota_state)
+        btnProtoHeartbeat?.setOnClickListener { toggleHeartbeat() }
+
+        // 电机组 / 动作下拉
+        spMotorGroup = findViewById(R.id.sp_motor_group)
+        spMotorAction = findViewById(R.id.sp_motor_action)
+        val groupNames = listOf("全部电机组(0x00)", "行走/横移(0x01)", "卷扬/升降/旋转(0x02)",
+            "安全(0x03)", "成像板(0x04)", "舵机/旋转(0x05)", "支柱水平(0x06)", "支柱伸缩(0x07)", "支柱旋转(0x08)")
+        val actionNames = listOf("停止(0x00)", "正向:右/上/关/伸出/检测(0x01)",
+            "反向:左/下/开/回收/归位(0x02)", "刹车(0x03)", "自动行走(0x04)")
+        spMotorGroup?.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, groupNames)
+            .also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+        spMotorAction?.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, actionNames)
+            .also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+
+        // 射线机
+        findViewById<View>(R.id.btn_xray_delay).setOnClickListener {
+            sendProto(WHSDControlBoardProtocol.setXRayDelaySeconds(etInt(R.id.et_xray_delay, 15)))
+        }
+        findViewById<View>(R.id.btn_xray_pulse).setOnClickListener {
+            sendProto(WHSDControlBoardProtocol.setXRayPulseCount(etInt(R.id.et_xray_pulse, 1)))
+        }
+        findViewById<View>(R.id.btn_xray_start).setOnClickListener {
+            sendProto(WHSDControlBoardProtocol.startXRay(1, 0, 1)) // 协议开启/不延迟
+        }
+        findViewById<View>(R.id.btn_xray_stop).setOnClickListener {
+            sendProto(WHSDControlBoardProtocol.stopXRay())
+        }
+
+        // 电机
+        findViewById<View>(R.id.btn_motor_run).setOnClickListener {
+            val group = motorGroupCodes[spMotorGroup?.selectedItemPosition ?: 0]
+            val action = motorActionCodes[spMotorAction?.selectedItemPosition ?: 0]
+            val enable = etStr(R.id.et_motor_enable).toIntOrNull(16) ?: 0x01
+            val speed = etInt(R.id.et_motor_speed, 1)
+            sendProto(WHSDControlBoardProtocol.motorRun(group, enable, action, speed))
+        }
+        findViewById<View>(R.id.btn_motor_stop).setOnClickListener {
+            sendProto(WHSDControlBoardProtocol.motorStop(motorGroupCodes[spMotorGroup?.selectedItemPosition ?: 0]))
+        }
+        findViewById<View>(R.id.btn_motor_stop_all).setOnClickListener {
+            sendProto(WHSDControlBoardProtocol.motorStopAll())
+        }
+        findViewById<View>(R.id.btn_motor_brake_all).setOnClickListener {
+            sendProto(WHSDControlBoardProtocol.motorBrakeAll())
+        }
+
+        // 电源 / 模式 / 摄像头
+        findViewById<View>(R.id.btn_relay_on).setOnClickListener { sendProto(WHSDControlBoardProtocol.setRelay(true)) }
+        findViewById<View>(R.id.btn_relay_off).setOnClickListener { sendProto(WHSDControlBoardProtocol.setRelay(false)) }
+        findViewById<View>(R.id.btn_camera_on).setOnClickListener { sendProto(WHSDControlBoardProtocol.setCameraPower(true)) }
+        findViewById<View>(R.id.btn_camera_off).setOnClickListener { sendProto(WHSDControlBoardProtocol.setCameraPower(false)) }
+        findViewById<View>(R.id.btn_factory_on).setOnClickListener { sendProto(WHSDControlBoardProtocol.setFactoryMode(true)) }
+        findViewById<View>(R.id.btn_factory_off).setOnClickListener { sendProto(WHSDControlBoardProtocol.setFactoryMode(false)) }
+        findViewById<View>(R.id.btn_mode_single).setOnClickListener { sendProto(WHSDControlBoardProtocol.setMotorControlMode(false)) }
+        findViewById<View>(R.id.btn_mode_linked).setOnClickListener { sendProto(WHSDControlBoardProtocol.setMotorControlMode(true)) }
+
+        // 传感器
+        findViewById<View>(R.id.btn_detect_start).setOnClickListener {
+            sendProto(WHSDControlBoardProtocol.sensorStartDetect(etInt(R.id.et_sensor_index, 0)))
+        }
+        findViewById<View>(R.id.btn_detect_stop).setOnClickListener {
+            sendProto(WHSDControlBoardProtocol.sensorStopDetect(etInt(R.id.et_sensor_index, 0)))
+        }
+        findViewById<View>(R.id.btn_sensor_status).setOnClickListener {
+            sendProto(WHSDControlBoardProtocol.sensorQueryStatus(etInt(R.id.et_sensor_index, 0)))
+        }
+        findViewById<View>(R.id.btn_sensor_battery).setOnClickListener {
+            sendProto(WHSDControlBoardProtocol.sensorQueryBattery(etInt(R.id.et_sensor_index, 0)))
+        }
+        findViewById<View>(R.id.btn_sensor_result).setOnClickListener {
+            sendProto(WHSDControlBoardProtocol.sensorQueryResult(etInt(R.id.et_sensor_index, 0)))
+        }
+        findViewById<View>(R.id.btn_encoder_zero).setOnClickListener {
+            sendProto(WHSDControlBoardProtocol.encoderResetZero(1))
+        }
+
+        // X值校准（0x17）：阻值输入为 MΩ 物理值，内部转毫值
+        findViewById<View>(R.id.btn_calib_write_k).setOnClickListener {
+            sendProto(WHSDControlBoardProtocol.calibWriteK(etFloat(R.id.et_calib_k, 10f)))
+        }
+        findViewById<View>(R.id.btn_calib_read_k).setOnClickListener { sendProto(WHSDControlBoardProtocol.calibReadK()) }
+        findViewById<View>(R.id.btn_calib_reset).setOnClickListener { sendProto(WHSDControlBoardProtocol.calibReset()) }
+        findViewById<View>(R.id.btn_calib_query_raw).setOnClickListener { sendProto(WHSDControlBoardProtocol.calibQueryRaw()) }
+        findViewById<View>(R.id.btn_calib_read_coef).setOnClickListener { sendProto(WHSDControlBoardProtocol.calibReadCoef()) }
+        findViewById<View>(R.id.btn_calib_sample0).setOnClickListener { sendProto(WHSDControlBoardProtocol.calibReadSamples(0, -1)) }
+        findViewById<View>(R.id.btn_calib_sample1).setOnClickListener { sendProto(WHSDControlBoardProtocol.calibReadSamples(1, -1)) }
+        findViewById<View>(R.id.btn_calib_verify).setOnClickListener {
+            sendProto(WHSDControlBoardProtocol.calibVerify(milli(etFloat(R.id.et_calib_raw, 788f))))
+        }
+        findViewById<View>(R.id.btn_calib_single).setOnClickListener {
+            sendProto(WHSDControlBoardProtocol.calibSinglePoint(
+                milli(etFloat(R.id.et_calib_std, 500f)), milli(etFloat(R.id.et_calib_raw, 788f))))
+        }
+
+        // 自动行走配置（0x18）
+        findViewById<View>(R.id.btn_walk_write).setOnClickListener {
+            sendProto(WHSDControlBoardProtocol.writeAutoWalkConfig(
+                etInt(R.id.et_walk_continue, 1000), etInt(R.id.et_walk_timeout, 6000)))
+        }
+        findViewById<View>(R.id.btn_walk_read).setOnClickListener { sendProto(WHSDControlBoardProtocol.readAutoWalkConfig()) }
+
+        // 配置参数（0x0D）
+        findViewById<View>(R.id.btn_cfg_send).setOnClickListener {
+            val cfg = ControlBoardConfig()
+            cfg.lidarMinDis = etInt(R.id.et_cfg_lidar_min, 100)
+            cfg.lidarMaxDis = etInt(R.id.et_cfg_lidar_max, 2000)
+            cfg.safeAngle = etFloat(R.id.et_cfg_safe_angle, 10f)
+            cfg.panelAngle = etFloat(R.id.et_cfg_panel_angle, 10f)
+            cfg.walkingVoltage = etFloat(R.id.et_cfg_v_walk, 1f)
+            cfg.safeVoltage = etFloat(R.id.et_cfg_v_safe, 1f)
+            cfg.panelVoltage = etFloat(R.id.et_cfg_v_panel, 1f)
+            cfg.winchVoltage = etFloat(R.id.et_cfg_v_winch, 1f)
+            cfg.winch2Voltage = etFloat(R.id.et_cfg_v_winch2, 1f)
+            cfg.panelRunMs = etInt(R.id.et_cfg_panel_run, 5000).toLong()
+            sendProto(WHSDControlBoardProtocol.setControlBoardConfig(cfg))
+        }
+
+        // 用户网络参数（0x10）
+        findViewById<View>(R.id.btn_net_send).setOnClickListener {
+            val ip = parseIp(etStr(R.id.et_net_ip))
+            val mask = parseIp(etStr(R.id.et_net_mask))
+            val gateway = parseIp(etStr(R.id.et_net_gateway))
+            if (ip == null || mask == null || gateway == null) {
+                toast("IP/掩码/网关格式错误，需形如 192.168.1.111")
+                return@setOnClickListener
+            }
+            sendProto(WHSDControlBoardProtocol.setUserNetworkConfig(
+                etStr(R.id.et_net_ssid), etStr(R.id.et_net_pwd), ip, etInt(R.id.et_net_port, 8234), mask, gateway))
+        }
+
+        // OTA
+        findViewById<View>(R.id.btn_ota_file).setOnClickListener {
+            if (pipeline == null) { toast("请先连接数传管道"); return@setOnClickListener }
+            otaFilePicker.launch("*/*")
+        }
+        findViewById<View>(R.id.btn_ota_enter).setOnClickListener {
+            otaWaitingEnter = false
+            sendProto(WHSDControlBoardProtocol.enterOtaMode())
+        }
+        findViewById<View>(R.id.btn_ota_exit).setOnClickListener {
+            otaActive = false
+            otaWaitingEnter = false
+            loopHandler.removeCallbacks(otaTimeoutRunnable)
+            sendProto(WHSDControlBoardProtocol.exitOtaMode())
+        }
+    }
+
+    /** 按钮发送入口：未连接管道时提示；心跳等内部发送不走此处 */
+    private fun sendProto(frame: ByteArray) {
+        if (pipeline == null) { toast("请先连接数传管道"); return }
+        protocol.send(frame)
+    }
+
+    private fun toggleHeartbeat() {
+        if (heartbeating) {
+            protocol.stopHeartbeat()
+            heartbeating = false
+            btnProtoHeartbeat?.text = "启动心跳"
+            appendLog("SYS", "停止心跳应答")
+        } else {
+            if (pipeline == null) { toast("请先连接数传管道"); return }
+            protocol.startHeartbeat()
+            heartbeating = true
+            btnProtoHeartbeat?.text = "停止心跳"
+            appendLog("SYS", "启动心跳应答（200ms）")
+        }
+    }
+
+    /** 断开管道时停心跳、中止 OTA、清接收缓冲 */
+    private fun stopProtocolSession() {
+        if (heartbeating) {
+            protocol.stopHeartbeat()
+            heartbeating = false
+            btnProtoHeartbeat?.text = "启动心跳"
+        }
+        otaActive = false
+        otaWaitingEnter = false
+        loopHandler.removeCallbacks(otaTimeoutRunnable)
+        protocol.resetBuffer()
+    }
+
+    private fun startOta(file: ByteArray) {
+        if (pipeline == null) { toast("请先连接数传管道"); return }
+        val packLen = WHSDControlBoardProtocol.OTA_PACK_LEN
+        val chunks = ArrayList<ByteArray>()
+        var off = 0
+        while (off < file.size) {
+            val n = minOf(packLen, file.size - off)
+            chunks.add(file.copyOfRange(off, off + n).copyOf(packLen)) // 末包不足补 0
+            off += n
+        }
+        otaChunks = chunks
+        otaIndex = 0
+        otaErrors = 0
+        otaActive = false
+        otaWaitingEnter = true
+        appendLog("OTA", "固件 ${file.size}B 共 ${chunks.size} 包，请求进入 OTA…")
+        updateOtaState("等待进入应答…")
+        sendProto(WHSDControlBoardProtocol.enterOtaMode())
+    }
+
+    private fun sendOtaPack() {
+        if (!otaActive || otaIndex >= otaChunks.size) return
+        loopHandler.removeCallbacks(otaTimeoutRunnable)
+        sendProto(WHSDControlBoardProtocol.buildOtaDataFrame(otaChunks.size, otaIndex + 1, otaChunks[otaIndex]))
+        updateOtaState("发送 ${otaIndex + 1}/${otaChunks.size} (重试$otaErrors)")
+        loopHandler.postDelayed(otaTimeoutRunnable, 500)
+    }
+
+    private fun updateOtaState(s: String) {
+        runOnUiThread { tvOtaState?.text = "OTA:$s" }
+    }
+
+    private fun etInt(id: Int, def: Int): Int =
+        findViewById<EditText>(id)?.text?.toString()?.trim()?.toIntOrNull() ?: def
+
+    private fun etFloat(id: Int, def: Float): Float =
+        findViewById<EditText>(id)?.text?.toString()?.trim()?.toFloatOrNull() ?: def
+
+    private fun etStr(id: Int): String =
+        findViewById<EditText>(id)?.text?.toString()?.trim().orEmpty()
+
+    /** MΩ 物理值 → int32 毫值 */
+    private fun milli(v: Float): Int = Math.round(v * 1000f)
+
+    private fun parseIp(s: String): ByteArray? {
+        val parts = s.split(".")
+        if (parts.size != 4) return null
+        val b = ByteArray(4)
+        for (i in 0..3) {
+            val v = parts[i].toIntOrNull() ?: return null
+            if (v !in 0..255) return null
+            b[i] = v.toByte()
+        }
+        return b
+    }
+
     @Synchronized
     private fun appendLog(dir: String, msg: String) {
         linkLog.append(AppUtils.getTimeStamp()).append(" [").append(dir).append("] ").append(msg).append('\n')
@@ -694,6 +1136,7 @@ class HomeActivity: AppCompatActivity() {
         super.onDestroy()
         infoLiveData.removeObservers(this)
         stopLoop()
+        protocol.stopHeartbeat()
         loopHandler.removeCallbacksAndMessages(null)
         KeyManager.cancelListen(keySignalQualityListener)
         // 只释放本页自己创建的管道；遥控器连接由 DetectMainActivity.onDestroy 统一断开，
