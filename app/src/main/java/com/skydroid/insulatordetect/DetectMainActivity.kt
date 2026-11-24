@@ -337,32 +337,40 @@ class DetectMainActivity : AppCompatActivity(),
 
     private fun initRecyclerView() {
         adapter = PieceAdapter(engine.pieces, config.isDual) { index -> engine.jumpTo(index) }
-        rvPieces.layoutManager =
-            if (config.isDual) newDualLayoutManager() else LinearLayoutManager(this)
+        applyDualLayout()
         rvPieces.adapter = adapter
         engine.resetPieces()
     }
 
     /**
-     * 双联网格布局：100 span 细分宽度（rv 内容宽固定 220dp，1 span = 2.2dp）。
-     * 行序号列 10 span ≈ 22dp（11sp 下刚好容纳 3 位数）；
-     * 左/右串片格各 43 span ≈ 95dp，列间显式留 2 span ≈ 4dp 间隔
-     * （span 排布：序号 0..10 | 隔 2 | 左 12..55 | 隔 2 | 右 57..100）。
+     * 双联网格布局：100 span 细分宽度（双联面板 210dp 下 rv 内容宽 190dp，1 span = 1.9dp）。
+     * 行序号列 12 span ≈ 23dp（11sp 下刚好容纳 3 位数）；
+     * 左/右串片格各 42 span ≈ 80dp，列间显式留 2 span ≈ 4dp 间隔
+     * （span 排布：序号 0..12 | 隔 2 | 左 14..56 | 隔 2 | 右 58..100）。
      */
     private fun newDualLayoutManager(): GridLayoutManager {
         return GridLayoutManager(this, 100).apply {
             spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
                 override fun getSpanSize(position: Int): Int =
-                    if (position % 3 == 0) 10 else 43
+                    if (position % 3 == 0) 12 else 42
 
                 override fun getSpanIndex(position: Int, spanCount: Int): Int =
                     when (position % 3) {
                         0 -> 0
-                        1 -> 12
-                        else -> 57
+                        1 -> 14
+                        else -> 58
                     }
             }
         }
+    }
+
+    /** 双联时面板收窄至 210dp（数据列约 80dp），单联保持 240dp */
+    private fun applyDualLayout() {
+        val dual = config.isDual
+        rvPieces.layoutManager =
+            if (dual) newDualLayoutManager() else LinearLayoutManager(this)
+        val panel = findViewById<View>(R.id.stringPanel)
+        panel.layoutParams = panel.layoutParams.apply { width = dp(if (dual) 200 else 150) }
     }
 
     /**
@@ -520,8 +528,7 @@ class DetectMainActivity : AppCompatActivity(),
     override fun onPiecesReset() {
         runOnUiThread {
             adapter.setDualMode(config.isDual)
-            rvPieces.layoutManager =
-                if (config.isDual) newDualLayoutManager() else LinearLayoutManager(this)
+            applyDualLayout()
             adapter.notifyDataSetChanged()
         }
     }

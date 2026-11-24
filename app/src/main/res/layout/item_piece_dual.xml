@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   绝缘子片列表项-双联（对应 .piece-list.dual .piece，紧凑样式，无序号列）
-  240dp 面板下左/右串格约 95dp（行序号列约 22dp、列间隔约 4dp），行高 34dp；
+  210dp 面板下左/右串格约 80dp（行序号列约 23dp、列间隔约 4dp），行高 34dp；
   内容居中撑满格宽（对应 HTML justify-content:center），避免格内留白形成列间黑带
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -13,8 +13,8 @@
     android:background="@drawable/bg_piece_idle"
     android:gravity="center"
     android:orientation="horizontal"
-    android:paddingStart="3dp"
-    android:paddingEnd="3dp">
+    android:paddingStart="2dp"
+    android:paddingEnd="2dp">
 
     <com.skydroid.insulatordetect.ui.InsulatorIconView
         android:id="@+id/iconInsulator"
@@ -24,7 +24,7 @@
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="3dp"
+        android:layout_marginStart="2dp"
         android:orientation="vertical">
 
         <TextView
