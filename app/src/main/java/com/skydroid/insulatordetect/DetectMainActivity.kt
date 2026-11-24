@@ -365,16 +365,24 @@ class DetectMainActivity : AppCompatActivity(),
         }
     }
 
-    /** 动态生成手柄通道 chip（需求3：按了哪个按钮，界面有显示） */
+    /**
+     * 动态生成手柄通道 chip（需求3：按了哪个按钮，界面有显示）。
+     * 每个通道对应一个 TextView 胶囊，初始只显示通道名；
+     * 通道值与高亮由 onChannels() 回调实时刷新（见 RCInputMonitor.Listener）。
+     */
     private fun initChannelChips() {
+        // 清空旧 chip，保证重复调用时不叠加
         rcStrip.removeAllViews()
         val names = RCInputMonitor.CHANNEL_NAMES
+        // 按通道名数组批量创建 chip 并缓存，索引与通道号一一对应
         channelChips = Array(names.size) { i ->
             TextView(this).apply {
                 text = names[i]
                 textSize = 10f
                 setTextColor(0xFF9FB3A8.toInt())
+                // 胶囊背景（含 activated 高亮态，通道值变化时短暂点亮）
                 setBackgroundResource(R.drawable.bg_ch_chip)
+                // 水平 6dp / 垂直 3dp 内边距，chip 间留 4dp 间隔
                 val pad = dp(6)
                 setPadding(pad, dp(3), pad, dp(3))
                 val lp = LinearLayout.LayoutParams(

@@ -807,18 +807,6 @@ class HomeActivity: AppCompatActivity() {
                 appendLog("SENSOR", "传感器${data.sensorIndex} $desc")
             }
 
-            override fun onSensorBattery(sensorIndex: Int, percent: Int) {
-                appendLog("SENSOR", "传感器$sensorIndex 电量反馈 $percent%")
-            }
-
-            override fun onSensorStatus(sensorIndex: Int, status: Int) {
-                appendLog("SENSOR", "传感器$sensorIndex 状态反馈 $status（0待机 1触发 2完成）")
-            }
-
-            override fun onSensorRawValue(sensorIndex: Int, value: ByteArray) {
-                appendLog("SENSOR", "传感器$sensorIndex 数值 ${WHSDControlBoardProtocol.toHex(value)}")
-            }
-
             override fun onCalibAnswer(a: CalibAnswer) {
                 val detail = if (a.isKAnswer()) {
                     "K=%.3f".format(a.k)
@@ -827,15 +815,6 @@ class HomeActivity: AppCompatActivity() {
                 }
                 appendLog("CALIB", "子命令0x%02X %s 原因0x%02X %s".format(
                     a.subCmd, if (a.isSuccess) "成功" else "失败", a.reason, detail))
-            }
-
-            override fun onSampleVoltage(f: WHSDControlBoardProtocol.SampleVoltageFrame) {
-                if (f.isSuccess) {
-                    appendLog("SAMPLE", "第${f.group}组 总点数${f.totalPoints} 起始${f.startIndex} " +
-                            "本帧${f.voltagesMv.size}点(mV):${f.voltagesMv.take(8).joinToString()}")
-                } else {
-                    appendLog("SAMPLE", "第${f.group}组 失败 原因0x%02X".format(f.reason))
-                }
             }
 
             override fun onAutoWalkAnswer(a: WHSDControlBoardProtocol.AutoWalkAnswer) {
@@ -902,15 +881,11 @@ class HomeActivity: AppCompatActivity() {
             sendProto(WHSDControlBoardProtocol.motorBrakeAll())
         }
 
-        // 电源 / 模式 / 摄像头
+        // 电源 / 模式
         findViewById<View>(R.id.btn_relay_on).setOnClickListener { sendProto(WHSDControlBoardProtocol.setRelay(true)) }
         findViewById<View>(R.id.btn_relay_off).setOnClickListener { sendProto(WHSDControlBoardProtocol.setRelay(false)) }
-        findViewById<View>(R.id.btn_camera_on).setOnClickListener { sendProto(WHSDControlBoardProtocol.setCameraPower(true)) }
-        findViewById<View>(R.id.btn_camera_off).setOnClickListener { sendProto(WHSDControlBoardProtocol.setCameraPower(false)) }
         findViewById<View>(R.id.btn_factory_on).setOnClickListener { sendProto(WHSDControlBoardProtocol.setFactoryMode(true)) }
         findViewById<View>(R.id.btn_factory_off).setOnClickListener { sendProto(WHSDControlBoardProtocol.setFactoryMode(false)) }
-        findViewById<View>(R.id.btn_mode_single).setOnClickListener { sendProto(WHSDControlBoardProtocol.setMotorControlMode(false)) }
-        findViewById<View>(R.id.btn_mode_linked).setOnClickListener { sendProto(WHSDControlBoardProtocol.setMotorControlMode(true)) }
 
         // 传感器
         findViewById<View>(R.id.btn_detect_start).setOnClickListener {
@@ -928,9 +903,6 @@ class HomeActivity: AppCompatActivity() {
         findViewById<View>(R.id.btn_sensor_result).setOnClickListener {
             sendProto(WHSDControlBoardProtocol.sensorQueryResult(etInt(R.id.et_sensor_index, 0)))
         }
-        findViewById<View>(R.id.btn_encoder_zero).setOnClickListener {
-            sendProto(WHSDControlBoardProtocol.encoderResetZero(1))
-        }
 
         // X值校准（0x17）：阻值输入为 MΩ 物理值，内部转毫值
         findViewById<View>(R.id.btn_calib_write_k).setOnClickListener {
@@ -940,8 +912,6 @@ class HomeActivity: AppCompatActivity() {
         findViewById<View>(R.id.btn_calib_reset).setOnClickListener { sendProto(WHSDControlBoardProtocol.calibReset()) }
         findViewById<View>(R.id.btn_calib_query_raw).setOnClickListener { sendProto(WHSDControlBoardProtocol.calibQueryRaw()) }
         findViewById<View>(R.id.btn_calib_read_coef).setOnClickListener { sendProto(WHSDControlBoardProtocol.calibReadCoef()) }
-        findViewById<View>(R.id.btn_calib_sample0).setOnClickListener { sendProto(WHSDControlBoardProtocol.calibReadSamples(0, -1)) }
-        findViewById<View>(R.id.btn_calib_sample1).setOnClickListener { sendProto(WHSDControlBoardProtocol.calibReadSamples(1, -1)) }
         findViewById<View>(R.id.btn_calib_verify).setOnClickListener {
             sendProto(WHSDControlBoardProtocol.calibVerify(milli(etFloat(R.id.et_calib_raw, 788f))))
         }
@@ -971,19 +941,6 @@ class HomeActivity: AppCompatActivity() {
             cfg.winch2Voltage = etFloat(R.id.et_cfg_v_winch2, 1f)
             cfg.panelRunMs = etInt(R.id.et_cfg_panel_run, 5000).toLong()
             sendProto(WHSDControlBoardProtocol.setControlBoardConfig(cfg))
-        }
-
-        // 用户网络参数（0x10）
-        findViewById<View>(R.id.btn_net_send).setOnClickListener {
-            val ip = parseIp(etStr(R.id.et_net_ip))
-            val mask = parseIp(etStr(R.id.et_net_mask))
-            val gateway = parseIp(etStr(R.id.et_net_gateway))
-            if (ip == null || mask == null || gateway == null) {
-                toast("IP/掩码/网关格式错误，需形如 192.168.1.111")
-                return@setOnClickListener
-            }
-            sendProto(WHSDControlBoardProtocol.setUserNetworkConfig(
-                etStr(R.id.et_net_ssid), etStr(R.id.et_net_pwd), ip, etInt(R.id.et_net_port, 8234), mask, gateway))
         }
 
         // OTA
@@ -1080,18 +1037,6 @@ class HomeActivity: AppCompatActivity() {
 
     /** MΩ 物理值 → int32 毫值 */
     private fun milli(v: Float): Int = Math.round(v * 1000f)
-
-    private fun parseIp(s: String): ByteArray? {
-        val parts = s.split(".")
-        if (parts.size != 4) return null
-        val b = ByteArray(4)
-        for (i in 0..3) {
-            val v = parts[i].toIntOrNull() ?: return null
-            if (v !in 0..255) return null
-            b[i] = v.toByte()
-        }
-        return b
-    }
 
     @Synchronized
     private fun appendLog(dir: String, msg: String) {

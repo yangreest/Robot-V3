@@ -52,8 +52,7 @@ public class CalibAnswer {
     }
 
     /**
-     * 从 0x17 应答数据域解析（不含 0x10/0x11 采样电压子命令，
-     * 那两个由 {@link WHSDControlBoardProtocol.SampleVoltageFrame} 解析）。
+     * 从 0x17 应答数据域解析（子命令 + 结果 + 原因 [+ 参数1(4B)] [+ 参数2(4B)]）。
      */
     public static CalibAnswer parse(byte[] data) {
         if (data == null || data.length < 3) {

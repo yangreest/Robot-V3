@@ -5,11 +5,12 @@
     android:orientation="horizontal">
 
     <ScrollView
-        android:layout_width="wrap_content"
-        android:layout_height="match_parent">
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="4">
 
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:padding="5dp">
@@ -155,7 +156,7 @@
 
             <TextView
                 android:id="@+id/tv_link_state"
-                android:layout_width="260dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="机型:--  管道:未创建  状态:未连接"
                 android:textSize="12sp" />
@@ -279,7 +280,7 @@
 
             <TextView
                 android:id="@+id/tv_link_stats"
-                android:layout_width="260dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="TX 0 帧 / 0 B    RX 0 帧 / 0 B"
                 android:textSize="12sp" />
@@ -320,13 +321,13 @@
                 android:textStyle="bold" />
 
             <TextView
-                android:layout_width="260dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="指令经上方所选数传通道发送，应答解析见右侧日志"
                 android:textSize="11sp" />
 
             <LinearLayout
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
@@ -339,8 +340,9 @@
 
                 <TextView
                     android:id="@+id/tv_proto_state"
-                    android:layout_width="180dp"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_weight="1"
                     android:text="心跳:未收到"
                     android:textSize="11sp" />
             </LinearLayout>
@@ -377,11 +379,17 @@
                     style="@style/smallButton"
                     android:layout_marginStart="4dp"
                     android:text="设延时" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="6dp"
                     android:text="脉冲" />
 
                 <EditText
@@ -426,12 +434,12 @@
 
             <Spinner
                 android:id="@+id/sp_motor_group"
-                android:layout_width="260dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content" />
 
             <Spinner
                 android:id="@+id/sp_motor_action"
-                android:layout_width="260dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content" />
 
             <LinearLayout
@@ -447,7 +455,7 @@
 
                 <EditText
                     android:id="@+id/et_motor_enable"
-                    android:layout_width="52dp"
+                    android:layout_width="48dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="4dp"
                     android:inputType="text"
@@ -462,7 +470,7 @@
 
                 <EditText
                     android:id="@+id/et_motor_speed"
-                    android:layout_width="52dp"
+                    android:layout_width="48dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="4dp"
                     android:inputType="number"
@@ -503,7 +511,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:text="电源 / 模式 / 摄像头"
+                android:text="电源 / 模式"
                 android:textStyle="bold" />
 
             <LinearLayout
@@ -524,23 +532,6 @@
                     android:text="继电器关" />
 
                 <Button
-                    android:id="@+id/btn_camera_on"
-                    style="@style/smallButton"
-                    android:layout_marginEnd="6dp"
-                    android:text="摄像头开" />
-
-                <Button
-                    android:id="@+id/btn_camera_off"
-                    style="@style/smallButton"
-                    android:text="摄像头关" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <Button
                     android:id="@+id/btn_factory_on"
                     style="@style/smallButton"
                     android:layout_marginEnd="6dp"
@@ -549,26 +540,14 @@
                 <Button
                     android:id="@+id/btn_factory_off"
                     style="@style/smallButton"
-                    android:layout_marginEnd="6dp"
                     android:text="退工程模式" />
-
-                <Button
-                    android:id="@+id/btn_mode_single"
-                    style="@style/smallButton"
-                    android:layout_marginEnd="6dp"
-                    android:text="单步" />
-
-                <Button
-                    android:id="@+id/btn_mode_linked"
-                    style="@style/smallButton"
-                    android:text="联动" />
             </LinearLayout>
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:text="传感器(0x11~0x15)"
+                android:text="传感器(0x11)"
                 android:textStyle="bold" />
 
             <LinearLayout
@@ -624,13 +603,7 @@
                 <Button
                     android:id="@+id/btn_sensor_result"
                     style="@style/smallButton"
-                    android:layout_marginEnd="6dp"
                     android:text="查结果" />
-
-                <Button
-                    android:id="@+id/btn_encoder_zero"
-                    style="@style/smallButton"
-                    android:text="编码器置零" />
             </LinearLayout>
 
             <TextView
@@ -693,19 +666,7 @@
                 <Button
                     android:id="@+id/btn_calib_read_coef"
                     style="@style/smallButton"
-                    android:layout_marginEnd="6dp"
                     android:text="读公式系数" />
-
-                <Button
-                    android:id="@+id/btn_calib_sample0"
-                    style="@style/smallButton"
-                    android:layout_marginEnd="6dp"
-                    android:text="采样第0组" />
-
-                <Button
-                    android:id="@+id/btn_calib_sample1"
-                    style="@style/smallButton"
-                    android:text="采样第1组" />
             </LinearLayout>
 
             <LinearLayout
@@ -733,11 +694,17 @@
                     style="@style/smallButton"
                     android:layout_marginStart="4dp"
                     android:text="补偿验证" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="6dp"
                     android:text="标准值" />
 
                 <EditText
@@ -776,7 +743,7 @@
 
                 <EditText
                     android:id="@+id/et_walk_continue"
-                    android:layout_width="64dp"
+                    android:layout_width="52dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="4dp"
                     android:inputType="number"
@@ -791,7 +758,7 @@
 
                 <EditText
                     android:id="@+id/et_walk_timeout"
-                    android:layout_width="64dp"
+                    android:layout_width="52dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="4dp"
                     android:inputType="number"
@@ -852,11 +819,17 @@
                     android:inputType="number"
                     android:text="2000"
                     android:textSize="13sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="6dp"
                     android:text="安全轮角度" />
 
                 <EditText
@@ -884,6 +857,12 @@
                     android:textSize="13sp" />
             </LinearLayout>
 
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="异常电压阈值(V)"
+                android:textSize="11sp" />
+
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -893,11 +872,11 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="异常电压 行走" />
+                    android:text="行走" />
 
                 <EditText
                     android:id="@+id/et_cfg_v_walk"
-                    android:layout_width="48dp"
+                    android:layout_width="44dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="4dp"
                     android:inputType="numberDecimal"
@@ -912,7 +891,7 @@
 
                 <EditText
                     android:id="@+id/et_cfg_v_safe"
-                    android:layout_width="48dp"
+                    android:layout_width="44dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="4dp"
                     android:inputType="numberDecimal"
@@ -927,22 +906,28 @@
 
                 <EditText
                     android:id="@+id/et_cfg_v_panel"
-                    android:layout_width="48dp"
+                    android:layout_width="44dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="4dp"
                     android:inputType="numberDecimal"
                     android:text="1"
                     android:textSize="13sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
                     android:text="卷扬" />
 
                 <EditText
                     android:id="@+id/et_cfg_v_winch"
-                    android:layout_width="48dp"
+                    android:layout_width="44dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="4dp"
                     android:inputType="numberDecimal"
@@ -957,7 +942,7 @@
 
                 <EditText
                     android:id="@+id/et_cfg_v_winch2"
-                    android:layout_width="48dp"
+                    android:layout_width="44dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="4dp"
                     android:inputType="numberDecimal"
@@ -996,127 +981,6 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:text="用户网络参数(0x10)"
-                android:textStyle="bold" />
-
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="SSID" />
-
-                <EditText
-                    android:id="@+id/et_net_ssid"
-                    android:layout_width="100dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:inputType="text"
-                    android:text="WHSD"
-                    android:textSize="13sp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="6dp"
-                    android:text="密码" />
-
-                <EditText
-                    android:id="@+id/et_net_pwd"
-                    android:layout_width="100dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:inputType="text"
-                    android:text="12345678"
-                    android:textSize="13sp" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="IP" />
-
-                <EditText
-                    android:id="@+id/et_net_ip"
-                    android:layout_width="104dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:inputType="text"
-                    android:text="192.168.1.111"
-                    android:textSize="12sp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:text="端口" />
-
-                <EditText
-                    android:id="@+id/et_net_port"
-                    android:layout_width="56dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:inputType="number"
-                    android:text="8234"
-                    android:textSize="13sp" />
-
-                <Button
-                    android:id="@+id/btn_net_send"
-                    style="@style/smallButton"
-                    android:layout_marginStart="6dp"
-                    android:text="下发" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="掩码" />
-
-                <EditText
-                    android:id="@+id/et_net_mask"
-                    android:layout_width="104dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:inputType="text"
-                    android:text="255.255.255.0"
-                    android:textSize="12sp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:text="网关" />
-
-                <EditText
-                    android:id="@+id/et_net_gateway"
-                    android:layout_width="104dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:inputType="text"
-                    android:text="192.168.1.1"
-                    android:textSize="12sp" />
-            </LinearLayout>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
                 android:text="OTA升级(0x0A~0x0C)"
                 android:textStyle="bold" />
 
@@ -1145,7 +1009,7 @@
 
             <TextView
                 android:id="@+id/tv_ota_state"
-                android:layout_width="260dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="OTA:空闲"
                 android:textSize="11sp" />
@@ -1161,7 +1025,7 @@
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="match_parent"
-        android:layout_weight="1"
+        android:layout_weight="6"
         android:orientation="vertical">
 
         <TextView

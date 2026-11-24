@@ -1,6 +1,5 @@
 package com.skydroid.insulatordetect.protocol;
 
-import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.Charset;
@@ -30,6 +29,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  *   // 数传/TCP 收到数据后：p.feed(bytes);
  * </pre>
  *
+ * <p>功能范围与 C++ 参考实现 WHSDControlBoradProtocol.h 保持一致，另保留自动行走相关指令（0x18/0x05自动行走）。
+ *
  * <p>多字节编码约定：0x0D 配置参数表与心跳电机状态为小端；
  * 0x17 校准族、0x18 自动行走配置、0x1A 舵机位置为大端；
  * X 值/标准值/系数 a/b 为 int32 毫值（物理值×1000），K 为 IEEE754 float。
@@ -51,15 +52,8 @@ public class WHSDControlBoardProtocol {
     public static final int CMD_OTA_DATA = 0x0B;
     public static final int CMD_OTA_EXIT = 0x0C;
     public static final int CMD_CONFIG = 0x0D;
-    public static final int CMD_CAMERA = 0x0E;
     public static final int CMD_SENSOR_VALUE = 0x0F;
-    public static final int CMD_USER_NETWORK = 0x10;
     public static final int CMD_SENSOR = 0x11;
-    public static final int CMD_SENSOR_BATTERY = 0x12;
-    public static final int CMD_SENSOR_STATUS = 0x13;
-    public static final int CMD_SENSOR_RAW = 0x14;
-    public static final int CMD_ENCODER_ZERO = 0x15;
-    public static final int CMD_CONTROL_MODE = 0x16;
     public static final int CMD_CALIB = 0x17;
     public static final int CMD_AUTO_WALK = 0x18;
     public static final int CMD_SERVO_ARRIVAL = 0x1A;
@@ -112,11 +106,7 @@ public class WHSDControlBoardProtocol {
     public static final int CALIB_SUB_QUERY_RAW = 0x06;
     public static final int CALIB_SUB_VERIFY = 0x0A;
     public static final int CALIB_SUB_READ_COEF = 0x0C;
-    /** 清除公式系数，会擦写 Flash，严禁用于读取数据 */
-    public static final int CALIB_SUB_CLEAR_COEF = 0x0D;
     public static final int CALIB_SUB_SINGLE_POINT = 0x0E;
-    public static final int CALIB_SUB_SAMPLE_GROUP0 = 0x10;
-    public static final int CALIB_SUB_SAMPLE_GROUP1 = 0x11;
 
     /** OTA 单包数据长度 */
     public static final int OTA_PACK_LEN = 128;
@@ -139,7 +129,7 @@ public class WHSDControlBoardProtocol {
         /** 0x00 模块心跳（200ms 一次） */
         default void onHeartBeat(DeviceHeartBeat heartBeat) {}
 
-        /** 单字节执行结果应答：0x01/0x02/0x03/0x04/0x05/0x09/0x0D/0x0E/0x10/0x15/0x16 */
+        /** 单字节执行结果应答：0x01/0x02/0x03/0x04/0x05/0x09/0x0D 等 */
         default void onCommandAck(int cmd, int value) {}
 
         /** 0x06 电机故障反馈：motorType 0行走 1卷扬 2安全 3成像板 4舵机 5支柱水平 6支柱伸缩 7支柱旋转 */
@@ -169,20 +159,8 @@ public class WHSDControlBoardProtocol {
         /** 0x11 传感器指令反馈（设备状态/电量/检测结果） */
         default void onSensorData(SensorData data) {}
 
-        /** 0x12 传感器模块电量反馈 */
-        default void onSensorBattery(int sensorIndex, int percent) {}
-
-        /** 0x13 传感器模块状态反馈：0待机 1触发 2触发完成 */
-        default void onSensorStatus(int sensorIndex, int status) {}
-
-        /** 0x14 编码器等传感器数值反馈（原始字节，编码方式由传感器编号决定） */
-        default void onSensorRawValue(int sensorIndex, byte[] value) {}
-
-        /** 0x17 校准应答（0x10/0x11 采样电压子命令除外） */
+        /** 0x17 校准应答 */
         default void onCalibAnswer(CalibAnswer answer) {}
-
-        /** 0x17/0x10、0x17/0x11 采样电压序列 */
-        default void onSampleVoltage(SampleVoltageFrame frame) {}
 
         /** 0x18 自动行走配置应答 */
         default void onAutoWalkAnswer(AutoWalkAnswer answer) {}
@@ -218,45 +196,6 @@ public class WHSDControlBoardProtocol {
         /** 步数转角度：角度 = 步数 × 360 ÷ 4095 */
         public static double stepsToAngle(int steps) {
             return steps * 360.0 / 4095.0;
-        }
-    }
-
-    /** 0x17/0x10、0x17/0x11 采样电压应答（int16 大端，单位 mV） */
-    public static class SampleVoltageFrame {
-        public int subCmd;
-        public int result;
-        /** 0x0A无数据 0x0B模块超时 0x0C回帧校验失败 0x0D起始索引越界 */
-        public int reason;
-        /** 组号：0继电器断开 1继电器闭合 */
-        public int group;
-        /** 该组完整点数（与分帧无关） */
-        public int totalPoints;
-        /** 本帧第一个点在整组中的下标 */
-        public int startIndex;
-        /** 本帧电压序列，单位 mV；单帧上限 100 点，超出按起始索引循环读取 */
-        public int[] voltagesMv = new int[0];
-
-        public boolean isSuccess() {
-            return result == 0x01;
-        }
-
-        static SampleVoltageFrame parse(byte[] p) {
-            if (p == null || p.length < 9) {
-                return null;
-            }
-            SampleVoltageFrame f = new SampleVoltageFrame();
-            f.subCmd = p[0] & 0xFF;
-            f.result = p[1] & 0xFF;
-            f.reason = p[2] & 0xFF;
-            f.group = p[3] & 0xFF;
-            f.totalPoints = ((p[4] & 0xFF) << 8) | (p[5] & 0xFF);
-            f.startIndex = ((p[6] & 0xFF) << 8) | (p[7] & 0xFF);
-            int n = Math.min(p[8] & 0xFF, (p.length - 9) / 2);
-            f.voltagesMv = new int[n];
-            for (int i = 0; i < n; i++) {
-                f.voltagesMv[i] = (short) (((p[9 + i * 2] & 0xFF) << 8) | (p[10 + i * 2] & 0xFF));
-            }
-            return f;
         }
     }
 
@@ -494,36 +433,9 @@ public class WHSDControlBoardProtocol {
         return buildFrame(CMD_CONFIG, config.toBytes());
     }
 
-    /** 0x0E 摄像头电源控制 */
-    public static byte[] setCameraPower(boolean on) {
-        return buildFrame(CMD_CAMERA, (byte) (on ? 0x01 : 0x00));
-    }
-
     /** 0x0F 传感器值反馈应答 */
     public static byte[] sensorValueAck(boolean success) {
         return buildFrame(CMD_SENSOR_VALUE, (byte) (success ? 0x01 : 0x00));
-    }
-
-    /**
-     * 0x10 自定义用户网络参数：ssid长度 + ssid + 密码长度 + 密码
-     * + IP(4B) + 端口(2B) + 掩码(4B) + 网关(4B)。
-     */
-    public static byte[] setUserNetworkConfig(String ssid, String password,
-                                              byte[] ip, int port, byte[] mask, byte[] gateway) {
-        Charset utf8 = Charset.forName("UTF-8");
-        byte[] ssidBytes = ssid.getBytes(utf8);
-        byte[] pwdBytes = password.getBytes(utf8);
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        out.write(ssidBytes.length);
-        out.write(ssidBytes, 0, ssidBytes.length);
-        out.write(pwdBytes.length);
-        out.write(pwdBytes, 0, pwdBytes.length);
-        out.write(ip, 0, 4);
-        out.write(port >> 8);
-        out.write(port & 0xFF);
-        out.write(mask, 0, 4);
-        out.write(gateway, 0, 4);
-        return buildFrame(CMD_USER_NETWORK, out.toByteArray());
     }
 
     /**
@@ -558,31 +470,6 @@ public class WHSDControlBoardProtocol {
     /** 0x11 查询检测结果：0零值 1正常 2未知 3未找到设备 */
     public static byte[] sensorQueryResult(int sensorIndex) {
         return sensorCmd(sensorIndex, SENSOR_CMD_RESULT, 0);
-    }
-
-    /** 0x12 查询传感器模块电量 */
-    public static byte[] querySensorBattery(int sensorIndex) {
-        return buildFrame(CMD_SENSOR_BATTERY, (byte) sensorIndex);
-    }
-
-    /** 0x13 查询传感器模块状态 */
-    public static byte[] querySensorStatus(int sensorIndex) {
-        return buildFrame(CMD_SENSOR_STATUS, (byte) sensorIndex);
-    }
-
-    /** 0x14 查询编码器等传感器数值 */
-    public static byte[] querySensorValue(int sensorIndex) {
-        return buildFrame(CMD_SENSOR_RAW, (byte) sensorIndex);
-    }
-
-    /** 0x15 编码器置零（参数含义以固件为准，默认传 0x01） */
-    public static byte[] encoderResetZero(int flag) {
-        return buildFrame(CMD_ENCODER_ZERO, (byte) flag);
-    }
-
-    /** 0x16 电机控制方式（单双一体智能款）：false 单步控制 true 联动控制 */
-    public static byte[] setMotorControlMode(boolean linked) {
-        return buildFrame(CMD_CONTROL_MODE, (byte) (linked ? 0x01 : 0x00));
     }
 
     // ==================== 0x17 校准命令族 ====================
@@ -628,11 +515,6 @@ public class WHSDControlBoardProtocol {
         return buildFrame(CMD_CALIB, (byte) CALIB_SUB_READ_COEF);
     }
 
-    /** 0x17/0x0D 清除公式系数。会擦写 Flash，严禁用于读取数据！采样读取请用 0x10/0x11 */
-    public static byte[] calibClearCoef() {
-        return buildFrame(CMD_CALIB, (byte) CALIB_SUB_CLEAR_COEF);
-    }
-
     /**
      * 0x17/0x0E 单点定标：标准值 + 实测原始值（均 int32 毫值大端，如 500 MΩ 传 500000）。
      * 要求两值 > 0 且原始值 < 标准值；写 Flash 需 1~2 秒，应答超时建议 ≥ 3 秒。
@@ -645,20 +527,6 @@ public class WHSDControlBoardProtocol {
         bb.putInt(stdMilli);
         bb.putInt(rawMilli);
         return buildFrame(CMD_CALIB, payload);
-    }
-
-    /**
-     * 0x17/0x10（第0组，继电器断开）或 0x17/0x11（第1组，继电器闭合）读采样电压。
-     * 必须先等 0x0F 回报后再发；单帧上限 100 点，总点数超出时按起始索引循环读取。
-     * @param group 0 或 1
-     * @param startIndex 起始索引（uint16），传 -1 表示省略（按 0 处理）
-     */
-    public static byte[] calibReadSamples(int group, int startIndex) {
-        byte sub = (byte) (group == 1 ? CALIB_SUB_SAMPLE_GROUP1 : CALIB_SUB_SAMPLE_GROUP0);
-        if (startIndex < 0) {
-            return buildFrame(CMD_CALIB, sub);
-        }
-        return buildFrame(CMD_CALIB, sub, (byte) (startIndex >> 8), (byte) startIndex);
     }
 
     // ==================== 0x18 自动行走配置 ====================
@@ -835,36 +703,10 @@ public class WHSDControlBoardProtocol {
                 }
                 break;
             }
-            case CMD_SENSOR_BATTERY: {
-                if (p.length >= 2 && l != null) {
-                    l.onSensorBattery(p[0] & 0xFF, p[1] & 0xFF);
-                }
-                break;
-            }
-            case CMD_SENSOR_STATUS: {
-                if (p.length >= 2 && l != null) {
-                    l.onSensorStatus(p[0] & 0xFF, p[1] & 0xFF);
-                }
-                break;
-            }
-            case CMD_SENSOR_RAW: {
-                if (p.length >= 2 && l != null) {
-                    int n = Math.min(p[1] & 0xFF, p.length - 2);
-                    l.onSensorRawValue(p[0] & 0xFF, Arrays.copyOfRange(p, 2, 2 + n));
-                }
-                break;
-            }
             case CMD_CALIB: {
-                if (p.length >= 1 && (p[0] == CALIB_SUB_SAMPLE_GROUP0 || p[0] == CALIB_SUB_SAMPLE_GROUP1)) {
-                    SampleVoltageFrame f = SampleVoltageFrame.parse(p);
-                    if (f != null && l != null) {
-                        l.onSampleVoltage(f);
-                    }
-                } else {
-                    CalibAnswer a = CalibAnswer.parse(p);
-                    if (a != null && l != null) {
-                        l.onCalibAnswer(a);
-                    }
+                CalibAnswer a = CalibAnswer.parse(p);
+                if (a != null && l != null) {
+                    l.onCalibAnswer(a);
                 }
                 break;
             }
@@ -888,7 +730,7 @@ public class WHSDControlBoardProtocol {
                 break;
             }
             default: {
-                // 0x01/0x02/0x03/0x04/0x05/0x09/0x0D/0x0E/0x10/0x15/0x16 等单字节结果应答
+                // 0x01/0x02/0x03/0x04/0x05/0x09/0x0D 等单字节结果应答
                 if (p.length >= 1 && l != null) {
                     l.onCommandAck(cmd, p[0] & 0xFF);
                 }
