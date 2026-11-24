@@ -59,10 +59,10 @@ class RCInputMonitor {
          * （H12Pro 按键定义参照 CustomRCButtonsActivity 注释；其他机型按通用序号显示）
          */
         val CHANNEL_NAMES = arrayOf(
-            "左摇杆↔", "左摇杆↕", "右摇杆↔", "右摇杆↕",
-            "A键", "B键", "E拨杆", "F拨杆",
-            "C键", "D键", "G滚轮", "H滚轮",
-            "CH13", "CH14", "CH15", "CH16"
+            "右摇杆↔", "右摇杆↕", "左摇杆↔", "左摇杆↕",
+            "G-S拨杆", "定位键", "L2键", "相机",
+            "B1键", "B2键", "L1键", "测量",
+            "急停", "拨轮", "R1键", "R2键"
         )
 
         fun channelName(index: Int): String =

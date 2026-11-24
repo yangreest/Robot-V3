@@ -612,11 +612,15 @@
         android:orientation="horizontal"
         android:paddingStart="8dp"
         android:paddingEnd="8dp">
-
+        <!-- 弹性间隔：把操作按钮推到右侧拇指区 -->
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
         <!-- 手柄按键/通道显示条（需求3：按了哪个按钮，界面有显示） -->
         <HorizontalScrollView
             android:id="@+id/rcStripScroll"
-            android:layout_width="190dp"
+            android:layout_width="290dp"
             android:layout_height="34dp"
             android:background="@drawable/bg_stat_cell"
             android:paddingStart="4dp"
@@ -631,11 +635,7 @@
                 android:orientation="horizontal" />
         </HorizontalScrollView>
 
-        <!-- 弹性间隔：把操作按钮推到右侧拇指区 -->
-        <View
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" />
+
 
         <!-- 拍照（图标按钮，44dp 圆形热区） -->
         <FrameLayout

@@ -623,16 +623,25 @@ class DetectMainActivity : AppCompatActivity(),
     //  RCInputMonitor.Listener（手柄按键显示）
     // =========================================================================
 
+    /**
+     * 通道值变化回调（仅在有通道变化时触发，H16 LISTEN / 其余机型 100ms 轮询）。
+     * @param channels 全量通道值；@param changed 本次发生变化的通道下标集合
+     */
     override fun onChannels(channels: IntArray, changed: Set<Int>) {
+        // 回调可能来自 SDK 采集线程，统一切到主线程处理
         runOnUiThread {
-            // 喂给 ButtonHelper 处理自定义按键
+            // 喂给 ButtonHelper 处理自定义按键（CUSTOM_0/CUSTOM_1）；
+            // SDK 内部异常不影响后续 chip 显示，故单独吞异常
             try { customButtonHelper?.receiveButtonData(channels) } catch (_: Exception) {}
             // 更新 chip 显示值 + 高亮变化通道
             channels.forEachIndexed { idx, value ->
+                // 防御：通道数可能多于已创建的 chip 数
                 if (idx >= channelChips.size) return@forEachIndexed
                 val chip = channelChips[idx]
                 chip.text = "${RCInputMonitor.channelName(idx)} $value"
                 if (idx in changed) {
+                    // 点亮 activated 高亮态（bg_ch_chip selector），700ms 后自动熄灭；
+                    // 连续变化时旧熄灭任务未取消，可能提前熄灭新高亮，属可接受的视觉简化
                     chip.isActivated = true
                     handler.postDelayed({ chip.isActivated = false }, 700)
                 }
