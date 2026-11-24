@@ -1513,28 +1513,38 @@ public class EasyPlayerClient implements Client.SourceCallBack {
     }
 
     @TargetApi(Build.VERSION_CODES.JELLY_BEAN_MR2)
-    public synchronized void startRecord(String path) {
-        if (mMediaInfo == null || mWidth == 0 || mHeight == 0 || mCSD0 == null) return;
+    public synchronized boolean startRecord(String path) {
+        if (TextUtils.isEmpty(path) || mMediaInfo == null || mWidth == 0 || mHeight == 0 || mCSD0 == null) {
+            return false;
+        }
 
-        mRecordingPath = path;
         EasyMuxer2 muxer2 = new EasyMuxer2();
         mMuxerCuttingMillis = 0l;
         mRecordingStatus = 0;
         muxerPausedMillis = 0;
-        ByteBuffer csd1 = this.mCSD1;
-        if (csd1 == null) csd1 = ByteBuffer.allocate(0);
-        byte[] extra = new byte[mCSD0.capacity() + csd1.capacity()];
-        mCSD0.clear();
+        // 使用 duplicate 读取编码配置，避免改变原 ByteBuffer 的 position，导致第二次录制取不到 SPS/PPS
+        ByteBuffer csd0 = this.mCSD0.duplicate();
+        ByteBuffer csd1 = this.mCSD1 == null ? ByteBuffer.allocate(0) : this.mCSD1.duplicate();
+        csd0.clear();
         csd1.clear();
-        mCSD0.get(extra, 0, mCSD0.capacity());
-        csd1.get(extra, mCSD0.capacity(), csd1.capacity());
+        byte[] extra = new byte[csd0.capacity() + csd1.capacity()];
+        csd0.get(extra, 0, csd0.capacity());
+        csd1.get(extra, csd0.capacity(), csd1.capacity());
 
-        int r = muxer2.create(path, mMediaInfo.videoCodec == EASY_SDK_VIDEO_CODEC_H265 ? VIDEO_TYPE_H265 : VIDEO_TYPE_H264, mWidth, mHeight, extra, mMediaInfo.sample, mMediaInfo.channel);
+        int r;
+        try {
+            r = muxer2.create(path, mMediaInfo.videoCodec == EASY_SDK_VIDEO_CODEC_H265 ? VIDEO_TYPE_H265 : VIDEO_TYPE_H264, mWidth, mHeight, extra, mMediaInfo.sample, mMediaInfo.channel);
+        } catch (RuntimeException | LinkageError e) {
+            Log.w(TAG, "create muxer2 error:" + e);
+            return false;
+        }
         if (r != 0) {
             Log.w(TAG, "create muxer2:" + r);
-            return;
+            return false;
         }
 
+        // 只有 native muxer 创建成功后才进入录像状态，失败时 isRecording() 必须保持 false
+        mRecordingPath = path;
         mMuxerWaitingKeyVideo = true;
         this.muxer2 = muxer2;
 
@@ -1542,6 +1552,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
         if (rr != null) {
             rr.send(RESULT_RECORD_BEGIN, null);
         }
+        return true;
     }
 
     public synchronized void pauseRecord() {
@@ -1640,6 +1651,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
 
 
     public synchronized void stopRecord() {
+        String recordPath = mRecordingPath;
         mRecordingPath = null;
         mMuxerCuttingMillis = 0l;
         mRecordingStatus = 0;
@@ -1651,7 +1663,10 @@ public class EasyPlayerClient implements Client.SourceCallBack {
         mObject = null;
         ResultReceiver rr = mRR;
         if (rr != null) {
-            rr.send(RESULT_RECORD_END, null);
+            // 带回文件路径，调用方据此忽略旧录像的延迟结束回调，避免误停新录像
+            Bundle data = new Bundle();
+            data.putString("recordPath", recordPath);
+            rr.send(RESULT_RECORD_END, data);
         }
     }
 

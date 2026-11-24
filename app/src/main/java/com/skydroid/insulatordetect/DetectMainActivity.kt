@@ -1,41 +1,40 @@
 package com.skydroid.insulatordetect
 
+import android.Manifest
 import android.animation.ObjectAnimator
 import android.content.BroadcastReceiver
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.media.MediaScannerConnection
 import android.os.BatteryManager
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.ResultReceiver
+import android.provider.MediaStore
 import android.util.Log
 import android.view.TextureView
 import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.skydroid.rcsdk.KeyManager
-import com.skydroid.rcsdk.PayloadManager
 import com.skydroid.rcsdk.RCSDKManager
 import com.skydroid.rcsdk.SDKManagerCallBack
-import com.skydroid.rcsdk.common.button.ButtonAction
-import com.skydroid.rcsdk.common.button.ButtonConfig
-import com.skydroid.rcsdk.common.button.ButtonHandler
-import com.skydroid.rcsdk.common.button.ButtonHandlerListener
-import com.skydroid.rcsdk.common.button.ButtonHelper
-import com.skydroid.rcsdk.common.button.HandleButtonMode
-import com.skydroid.rcsdk.common.callback.CompletionCallback
-import com.skydroid.rcsdk.common.callback.CompletionCallbackWith
 import com.skydroid.rcsdk.common.callback.KeyListener
 import com.skydroid.rcsdk.common.error.SkyException
-import com.skydroid.rcsdk.common.payload.C10Pro
-import com.skydroid.rcsdk.common.payload.PayloadType
 import com.skydroid.rcsdk.key.AirLinkKey
 import com.skydroid.rcsdk.utils.RCSDKUtils
 import com.skydroid.insulatordetect.detect.BadRecord
@@ -44,6 +43,7 @@ import com.skydroid.insulatordetect.detect.DetectConfig
 import com.skydroid.insulatordetect.detect.DetectionEngine
 import com.skydroid.insulatordetect.detect.Piece
 import com.skydroid.insulatordetect.detect.RobotLink
+import com.skydroid.insulatordetect.protocol.WHSDControlBoardProtocol
 import com.skydroid.insulatordetect.rc.RCInputMonitor
 import com.skydroid.insulatordetect.ui.BatteryView
 import com.skydroid.insulatordetect.ui.CurveView
@@ -52,9 +52,11 @@ import com.skydroid.insulatordetect.ui.PieceAdapter
 import com.skydroid.insulatordetect.ui.ReportDialogFragment
 import com.skydroid.insulatordetect.util.DpUtils
 import org.easydarwin.video.EasyPlayerClient
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.Executors
 
 /**
  * 瓷绝缘子零值检测机器人 手持终端主界面
@@ -69,6 +71,20 @@ class DetectMainActivity : AppCompatActivity(),
 
     companion object {
         private const val TAG = "DetectMainActivity"
+
+        private const val RC_PWM_CENTER = 1500
+        private const val RC_PWM_DEAD_ZONE = 120
+        private const val HORIZONTAL_MOTOR_ENABLE = 0x01
+        private const val SERVO_MOTOR_ENABLE = 0x01
+
+        // 协议只规定 0~180°，以下为机械位置标定值，真机调试时按实际限位调整
+        private const val SERVO_ANGLE_INNER = 90
+        private const val SERVO_ANGLE_OUTER = 180
+        private const val SERVO_ANGLE_RESET = 0
+
+        private const val MEDIA_DIRECTORY = "InsulatorRobot"
+        private const val ACTION_CAPTURE = 1
+        private const val ACTION_RECORD = 2
     }
 
     /* ==================== 配置与引擎 ==================== */
@@ -83,24 +99,58 @@ class DetectMainActivity : AppCompatActivity(),
     /** 进入 SDK 调试页前释放了机器人链路，返回后需重建 */
     private var linkReleasedForDebug = false
 
-    /* ==================== SDK ==================== */
-    private var c10Pro: C10Pro? = null
-    private var customButtonHelper: ButtonHelper? = null
+    /* ==================== SDK / RC 控制状态 ==================== */
     private val rcMonitor = RCInputMonitor()
+    private var hasRcSample = false
+    private var rcButtonStates = BooleanArray(RCInputMonitor.CHANNEL_NAMES.size)
+    private var lastRcManualMode: Boolean? = null
+    private var rcAutoWalkEnabled = false
+    private var horizontalAction: Int? = null
+    private var horizontalSpeed = WHSDControlBoardProtocol.SPEED_MID
 
-    /* ==================== 视频 ==================== */
+    /* ==================== 视频 / 媒体保存 ==================== */
     private var rtspPlayer: EasyPlayerClient? = null
     private lateinit var rtspTexture: TextureView
+    private var rtspFrameReady = false
+    private var recordingFile: File? = null
+    private val mediaExecutor = Executors.newSingleThreadExecutor()
+    private var pendingStorageAction = 0
+    private val storagePermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val action = pendingStorageAction
+        pendingStorageAction = 0
+        if (granted) {
+            when (action) {
+                ACTION_CAPTURE -> captureRtspFrame()
+                ACTION_RECORD -> startRtspRecording()
+            }
+        } else {
+            showToast("未授予存储权限，媒体文件未保存")
+        }
+    }
 
     /** 播放事件回调（code：1连接中 3已连接 4失败 6断流 7重连中 9超时 10退出；900分辨率 902首帧） */
     private val playerReceiver = object : ResultReceiver(Handler(Looper.getMainLooper())) {
         override fun onReceiveResult(resultCode: Int, resultData: Bundle?) {
-            val code = resultData?.getInt("code") ?: return
-            val msg = resultData.getString("msg") ?: ""
+            val code = resultData?.getInt("code") ?: resultCode
+            val msg = resultData?.getString("msg") ?: ""
             when (code) {
                 3 -> Log.i(TAG, "摄像头流已连接: $msg")
-                4, 6, 9, 10 -> Log.w(TAG, "摄像头流异常(code=$code): $msg")
-                902 -> Log.i(TAG, "视频首帧: $msg")
+                4, 6, 9, 10 -> {
+                    rtspFrameReady = false
+                    Log.w(TAG, "摄像头流异常(code=$code): $msg")
+                }
+                902 -> {
+                    rtspFrameReady = true
+                    Log.i(TAG, "视频首帧: $msg")
+                }
+                EasyPlayerClient.RESULT_RECORD_END -> {
+                    val endedPath = resultData?.getString("recordPath")
+                    if (endedPath.isNullOrEmpty() || endedPath == recordingFile?.absolutePath) {
+                        finishRecording(true)
+                    }
+                }
                 else -> Log.d(TAG, "播放事件 code=$code: $msg")
             }
         }
@@ -213,13 +263,6 @@ class DetectMainActivity : AppCompatActivity(),
         runOnUiThread { updateSignalDisplay() }
     }
 
-    private val buttonHandlerListener = object : ButtonHandlerListener {
-        override fun onButtonActionResult(buttonAction: ButtonAction, success: Boolean) {
-            if (buttonAction == ButtonAction.GIMBAL_YAW || buttonAction == ButtonAction.GIMBAL_PITCH) return
-            runOnUiThread { showToast("按键动作 ${buttonAction.name} 执行${if (success) "成功" else "失败"}") }
-        }
-    }
-
     // =========================================================================
     //  onCreate
     // =========================================================================
@@ -264,6 +307,13 @@ class DetectMainActivity : AppCompatActivity(),
                 }
             }, 500)
         }
+    }
+
+    override fun onPause() {
+        // 进入后台、调试页或系统权限弹窗时先停止检测和机器人动作
+        hasRcSample = false
+        stopDetectionAndRobot()
+        super.onPause()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -417,6 +467,8 @@ class DetectMainActivity : AppCompatActivity(),
 
     /** 启动播放；EasyPlayerClient 内部绑定 Activity 生命周期，自动 pause/resume/stop 与断流重连 */
     private fun startRtsp(url: String) {
+        if (isRecording) finishRecording(true)
+        rtspFrameReady = false
         rtspPlayer?.stop()
         rtspPlayer = EasyPlayerClient(this, rtspTexture, false, playerReceiver).apply {
             play(url)
@@ -439,7 +491,6 @@ class DetectMainActivity : AppCompatActivity(),
                     robotLink.connect()
                     rcMonitor.listener = this@DetectMainActivity
                     rcMonitor.start()
-                    initButtonHelper()
                     // 信号质量监听（H12 为 GET 方式，其余为 LISTEN）
                     try {
                         KeyManager.cancelListen(signalListener)
@@ -461,6 +512,12 @@ class DetectMainActivity : AppCompatActivity(),
                 override fun onRcDisconnect() {
                     Log.i(TAG, "遥控器断开")
                     rcConnected = false
+                    rcMonitor.stop()
+                    rcMonitor.listener = this@DetectMainActivity
+                    robotLink.disconnect()
+                    hasRcSample = false
+                    rcAutoWalkEnabled = false
+                    horizontalAction = null
                     runOnUiThread {
                         drawerController.setSysInfo("已断开", null)
                         showToast("遥控器已断开")
@@ -470,54 +527,17 @@ class DetectMainActivity : AppCompatActivity(),
             RCSDKManager.setMainThreadCallBack(true)
             RCSDKManager.connectToRC()
 
-            // C10Pro 相机控制（拍照/录像，按 RTSP 地址中的主机 IP 寻址）
-            c10Pro = (PayloadManager.getUDPPayload(
-                PayloadType.C10PRO, 5000, config.camHost(), 5000
-            ) as? C10Pro)?.also {
-                PayloadManager.connectPayload(it)
-            }
         } catch (e: Exception) {
             Log.e(TAG, "SDK 初始化异常: $e")
             showToast("SDK 初始化失败，进入模拟演示模式")
         }
     }
 
-    /** 自定义按键 ButtonHelper（CUSTOM_0=A键, CUSTOM_1=F拨杆） */
-    private fun initButtonHelper() {
-        val helper = ButtonHelper()
-        try {
-            helper.addListener(buttonHandlerListener)
-            helper.start()
-            val configs = mutableListOf(
-                ButtonConfig(4, ButtonAction.CUSTOM_0, HandleButtonMode.CHANGE),
-                ButtonConfig(7, ButtonAction.CUSTOM_1, HandleButtonMode.CHANGE)
-            )
-            helper.setConfig(configs, object : ButtonHandler {
-                override fun onHandleButton(
-                    action: ButtonAction, oldValue: Int, newValue: Int,
-                    buttonValues: IntArray, callback: CompletionCallback
-                ) {
-                    runOnUiThread {
-                        showToast("自定义按键 ${action.name}: $oldValue → $newValue")
-                        callback.onResult(null)
-                    }
-                }
-            })
-            customButtonHelper = helper
-        } catch (e: Exception) {
-            Log.w(TAG, "ButtonHelper 初始化失败: $e")
-            try {
-                helper.removeListener(buttonHandlerListener)
-                helper.stop()
-            } catch (_: Exception) {}
-        }
-    }
-
     private fun bindControls() {
         btnMode.setOnClickListener { toggleMode() }
-        btnStart.setOnClickListener { engine.onMainButton() }
+        btnStart.setOnClickListener { triggerMeasurement() }
         btnRec.setOnClickListener { toggleRecord() }
-        btnEstop.setOnClickListener { engine.emergencyStop() }
+        btnEstop.setOnClickListener { emergencyStopAll() }
         findViewById<View>(R.id.btnShot).setOnClickListener { takePicture() }
     }
 
@@ -627,7 +647,7 @@ class DetectMainActivity : AppCompatActivity(),
     }
 
     // =========================================================================
-    //  RCInputMonitor.Listener（手柄按键显示）
+    //  RCInputMonitor.Listener（手柄显示与机器人动作映射）
     // =========================================================================
 
     /**
@@ -637,23 +657,198 @@ class DetectMainActivity : AppCompatActivity(),
     override fun onChannels(channels: IntArray, changed: Set<Int>) {
         // 回调可能来自 SDK 采集线程，统一切到主线程处理
         runOnUiThread {
-            // 喂给 ButtonHelper 处理自定义按键（CUSTOM_0/CUSTOM_1）；
-            // SDK 内部异常不影响后续 chip 显示，故单独吞异常
-            try { customButtonHelper?.receiveButtonData(channels) } catch (_: Exception) {}
-            // 更新 chip 显示值 + 高亮变化通道
             channels.forEachIndexed { idx, value ->
-                // 防御：通道数可能多于已创建的 chip 数
                 if (idx >= channelChips.size) return@forEachIndexed
                 val chip = channelChips[idx]
                 chip.text = "${RCInputMonitor.channelName(idx)} $value"
                 if (idx in changed) {
-                    // 点亮 activated 高亮态（bg_ch_chip selector），700ms 后自动熄灭；
-                    // 连续变化时旧熄灭任务未取消，可能提前熄灭新高亮，属可接受的视觉简化
                     chip.isActivated = true
                     handler.postDelayed({ chip.isActivated = false }, 700)
                 }
             }
+            handleRcControls(channels)
         }
+    }
+
+    /** 将 RC 通道值转换为动作；数字量 0/1 与 PWM 1000/1500/2000 均兼容 */
+    private fun handleRcControls(channels: IntArray) {
+        val pressed = BooleanArray(rcButtonStates.size) { index ->
+            isRcButtonPressed(rcChannelValue(channels, index))
+        }
+        val wasPressed = rcButtonStates
+        val firstSample = !hasRcSample
+        rcButtonStates = pressed
+        hasRcSample = true
+
+        // 急停按住期间屏蔽其他动作；首次采集到急停按下时也立即执行全停
+        if (pressed[RCInputMonitor.CH_ESTOP]) {
+            if (firstSample || !wasPressed[RCInputMonitor.CH_ESTOP]) emergencyStopAll()
+            return
+        }
+
+        // 首次连接只采集状态并下发横移停止，避免连接瞬间执行拍照、测量或舵机动作
+        if (firstSample) {
+            lastRcManualMode = parseRcManualMode(rcChannelValue(channels, RCInputMonitor.CH_MODE_SWITCH))
+            horizontalSpeed = parseRcSpeed(rcChannelValue(channels, RCInputMonitor.CH_WHEEL))
+            updateHorizontalMotor(WHSDControlBoardProtocol.MOTOR_ACTION_STOP)
+            return
+        }
+
+        if (wasPressed[RCInputMonitor.CH_ESTOP]) {
+            // 急停释放后不自动恢复自动行走，必须重新切换模式或推动摇杆
+            horizontalAction = null
+            showToast("急停已释放，等待新的动作指令")
+        }
+
+        val manualMode = parseRcManualMode(rcChannelValue(channels, RCInputMonitor.CH_MODE_SWITCH))
+        if (manualMode != null && manualMode != lastRcManualMode) {
+            lastRcManualMode = manualMode
+            applyDetectionMode(manualMode, fromRc = true)
+        }
+
+        val speed = parseRcSpeed(rcChannelValue(channels, RCInputMonitor.CH_WHEEL))
+        if (speed != horizontalSpeed) {
+            horizontalSpeed = speed
+            horizontalAction?.let { updateHorizontalMotor(it, force = true) }
+        }
+
+        val direction = parseHorizontalDirection(rcChannelValue(channels, RCInputMonitor.CH_LEFT_STICK_X))
+        val action = when {
+            direction != 0 -> if (direction > 0) {
+                WHSDControlBoardProtocol.MOTOR_ACTION_FORWARD
+            } else {
+                WHSDControlBoardProtocol.MOTOR_ACTION_BACKWARD
+            }
+            config.isManual || !rcAutoWalkEnabled -> WHSDControlBoardProtocol.MOTOR_ACTION_STOP
+            else -> WHSDControlBoardProtocol.MOTOR_ACTION_AUTO_WALK
+        }
+        updateHorizontalMotor(action)
+
+        if (newlyPressed(RCInputMonitor.CH_L1, pressed, wasPressed)) {
+            moveServo(SERVO_ANGLE_INNER, "内测")
+        }
+        if (newlyPressed(RCInputMonitor.CH_L2, pressed, wasPressed)) {
+            moveServo(SERVO_ANGLE_OUTER, "外侧")
+        }
+        if (newlyPressed(RCInputMonitor.CH_R1, pressed, wasPressed)) {
+            moveServo(SERVO_ANGLE_RESET, "复位")
+        }
+        if (newlyPressed(RCInputMonitor.CH_CAMERA, pressed, wasPressed)) takePicture()
+        if (newlyPressed(RCInputMonitor.CH_MEASURE, pressed, wasPressed)) triggerMeasurement()
+    }
+
+    private fun newlyPressed(channel: Int, pressed: BooleanArray, wasPressed: BooleanArray): Boolean =
+        channel in pressed.indices && pressed[channel] && !wasPressed[channel]
+
+    private fun rcChannelValue(channels: IntArray, channel: Int): Int =
+        channels.getOrElse(channel) {
+            if (channel == RCInputMonitor.CH_LEFT_STICK_X ||
+                channel == RCInputMonitor.CH_MODE_SWITCH ||
+                channel == RCInputMonitor.CH_WHEEL
+            ) RC_PWM_CENTER else 0
+        }
+
+    private fun isRcButtonPressed(value: Int): Boolean = when {
+        value == 0 || value == 1 -> value == 1
+        value in 900..2100 -> value >= 1800
+        else -> false
+    }
+
+    /** 低档=手动，高档=自动，中位保持当前模式 */
+    private fun parseRcManualMode(value: Int): Boolean? = when {
+        value == 0 || value == 1 -> value == 0
+        value < RC_PWM_CENTER - 200 -> true
+        value > RC_PWM_CENTER + 200 -> false
+        else -> null
+    }
+
+    /** 返回 -1 左移、0 回中、1 右移 */
+    private fun parseHorizontalDirection(value: Int): Int = when {
+        value == 0 || value == 1 -> value
+        value > RC_PWM_CENTER + RC_PWM_DEAD_ZONE -> 1
+        value < RC_PWM_CENTER - RC_PWM_DEAD_ZONE -> -1
+        else -> 0
+    }
+
+    private fun parseRcSpeed(value: Int): Int = when {
+        value == 0 -> WHSDControlBoardProtocol.SPEED_LOW
+        value == 1 -> WHSDControlBoardProtocol.SPEED_HIGH
+        value <= 1333 -> WHSDControlBoardProtocol.SPEED_LOW
+        value >= 1667 -> WHSDControlBoardProtocol.SPEED_HIGH
+        else -> WHSDControlBoardProtocol.SPEED_MID
+    }
+
+    private fun updateHorizontalMotor(action: Int, force: Boolean = false) {
+        if (action != WHSDControlBoardProtocol.MOTOR_ACTION_STOP && isRcEstopHeld()) return
+        if (horizontalAction == action && !force) return
+        val speed = if (action == WHSDControlBoardProtocol.MOTOR_ACTION_STOP) 0 else horizontalSpeed
+        val sent = robotLink.send(WHSDControlBoardProtocol.motorRun(
+            WHSDControlBoardProtocol.MOTOR_GROUP_WALKING,
+            HORIZONTAL_MOTOR_ENABLE,
+            action,
+            speed
+        ))
+        // 未连接或写入失败时不缓存动作，后续通道变化还会重新尝试发送
+        if (sent) horizontalAction = action
+    }
+
+    private fun moveServo(angle: Int, position: String) {
+        if (isRcEstopHeld()) {
+            showToast("急停保持中，舵机指令已屏蔽")
+            return
+        }
+        robotLink.send(WHSDControlBoardProtocol.motorRun(
+            WHSDControlBoardProtocol.MOTOR_GROUP_SERVO,
+            SERVO_MOTOR_ENABLE,
+            WHSDControlBoardProtocol.MOTOR_ACTION_FORWARD,
+            angle
+        ))
+        showToast("舵机前往$position 位置（$angle°）")
+    }
+
+    /** 测量按钮与屏幕开始按钮共用：手动单片测量，自动启停连续检测 */
+    private fun triggerMeasurement() {
+        if (isRcEstopHeld()) {
+            showToast("急停保持中，测量指令已屏蔽")
+            return
+        }
+        if (engine.running) {
+            if (!config.isManual) {
+                engine.stopRun(false)
+                robotLink.send(WHSDControlBoardProtocol.sensorStopDetect(0))
+                showToast("已停止检测")
+            }
+            return
+        }
+        robotLink.send(WHSDControlBoardProtocol.sensorStartDetect(0))
+        engine.onMainButton()
+    }
+
+    private fun isRcEstopHeld(): Boolean =
+        rcButtonStates.getOrElse(RCInputMonitor.CH_ESTOP) { false }
+
+    /** 数传重连、退出页面和急停共用：停止检测、传感器、射线机和全部电机 */
+    private fun stopDetectionAndRobot() {
+        rcAutoWalkEnabled = false
+        robotLink.send(WHSDControlBoardProtocol.stopXRay())
+        robotLink.send(WHSDControlBoardProtocol.sensorStopDetect(0))
+        val stopped = robotLink.send(WHSDControlBoardProtocol.motorRun(
+            WHSDControlBoardProtocol.MOTOR_GROUP_ALL,
+            0xFF,
+            WHSDControlBoardProtocol.MOTOR_ACTION_STOP,
+            0
+        ))
+        robotLink.send(WHSDControlBoardProtocol.motorStopAll())
+        // 与 C++ DeviceBreak / 固件参考编码保持一致
+        robotLink.send(WHSDControlBoardProtocol.motorBrakeAll())
+        if (stopped) horizontalAction = WHSDControlBoardProtocol.MOTOR_ACTION_STOP
+        engine.stopRun(false)
+    }
+
+    /** 急停：停止检测、传感器、射线机和全部电机，并执行全刹车 */
+    private fun emergencyStopAll() {
+        stopDetectionAndRobot()
+        showToast(if (robotLink.isConnected) "已急停：全部动作停止" else "已停止检测，但数传未连接，设备急停指令未送达")
     }
 
     // =========================================================================
@@ -662,6 +857,14 @@ class DetectMainActivity : AppCompatActivity(),
 
     override fun onLinkStateChanged(connected: Boolean) {
         runOnUiThread {
+            if (connected) {
+                // 重连后先强制全停，不恢复断链前的电机动作，等待用户重新操作
+                stopDetectionAndRobot()
+            } else {
+                rcAutoWalkEnabled = false
+                horizontalAction = null
+                engine.stopRun(false)
+            }
             drawerController.setSysInfo(if (connected) "已连接" else "已断开", null)
         }
     }
@@ -721,10 +924,14 @@ class DetectMainActivity : AppCompatActivity(),
     }
 
     override fun onSdkDebugClick() {
-        // 调试页会占用同一数传通道，先释放机器人链路，返回后在 onResume 重建
+        if (linkReleasedForDebug) return
+        // 调试页会占用同一数传通道：先全停，留出短时间让 SDK 队列发出，再释放链路
         linkReleasedForDebug = true
-        robotLink.disconnect()
-        startActivity(Intent(this, HomeActivity::class.java))
+        stopDetectionAndRobot()
+        handler.postDelayed({
+            robotLink.disconnect()
+            startActivity(Intent(this, HomeActivity::class.java))
+        }, 200)
     }
 
     // =========================================================================
@@ -753,11 +960,27 @@ class DetectMainActivity : AppCompatActivity(),
             showToast("检测运行中，请先停止再切换模式")
             return
         }
-        config.mode = if (config.isManual) DetectConfig.MODE_AUTO else DetectConfig.MODE_MANUAL
+        applyDetectionMode(!config.isManual, fromRc = false)
+    }
+
+    /** 手动模式停止横移；自动模式启动协议定义的自动行走动作 */
+    private fun applyDetectionMode(manual: Boolean, fromRc: Boolean) {
+        if (isRcEstopHeld()) {
+            showToast("急停保持中，模式切换已屏蔽")
+            return
+        }
+        if (engine.running) engine.stopRun(false)
+        config.mode = if (manual) DetectConfig.MODE_MANUAL else DetectConfig.MODE_AUTO
         configStore.save(config)
-        // 模式状态直接体现在 btnMode 文案与配色上，顶栏不再重复一份
+        lastRcManualMode = manual
+        rcAutoWalkEnabled = !manual
         updateModeButton()
-        showToast(if (config.isManual) "已切换至手动模式：逐片点选检测" else "已切换至自动模式：1.5s/片 连续推进")
+        updateHorizontalMotor(
+            if (manual) WHSDControlBoardProtocol.MOTOR_ACTION_STOP
+            else WHSDControlBoardProtocol.MOTOR_ACTION_AUTO_WALK
+        )
+        val source = if (fromRc) "G-S：" else ""
+        showToast(if (manual) "${source}已切换至手动模式" else "${source}已切换至自动模式并启动自动行走")
     }
 
     private fun updateModeButton() {
@@ -776,62 +999,210 @@ class DetectMainActivity : AppCompatActivity(),
         }
     }
 
-    /** 录制切换（C10Pro 板载录像） */
+    /** 录制当前 RTSP 拉流的 H264/H265 压缩帧，结束后发布到系统影片目录 */
     private fun toggleRecord() {
-        val cam = c10Pro
-        if (cam == null) {
-            showToast("相机未连接，无法录制")
+        if (isRecording) {
+            finishRecording(true)
             return
         }
-        if (!isRecording) {
-            cam.startRecordVideo { e ->
-                runOnUiThread {
-                    if (e == null) {
-                        isRecording = true
-                        recordStartTime = System.currentTimeMillis()
-                        btnRec.setBackgroundResource(R.drawable.bg_ctl_pill_rec_on)
-                        tvRec.text = "停止"
-                        tvRec.setTextColor(0xFFFF3B30.toInt())
-                        recTimer.visibility = View.VISIBLE
-                        handler.post(recordTicker)
-                        showToast("开始录像（C10Pro 板载存储）")
-                    } else {
-                        showToast("开始录像失败: $e")
-                    }
-                }
-            }
+        ensureStoragePermission(ACTION_RECORD) { startRtspRecording() }
+    }
+
+    private fun startRtspRecording() {
+        val player = rtspPlayer
+        if (player == null || !rtspFrameReady) {
+            showToast("RTSP 视频尚未就绪，无法录像")
+            return
+        }
+        val file = createRecordingFile()
+        if (file == null) {
+            showToast("录像文件创建失败")
+            return
+        }
+        val started = runCatching { player.startRecord(file.absolutePath) }.getOrDefault(false)
+        if (!started) {
+            file.delete()
+            showToast("录像启动失败：视频编码信息尚未就绪或文件不可写")
+            return
+        }
+        recordingFile = file
+        updateRecordingUi(true)
+        showToast("开始录像（RTSP 拉流数据）")
+    }
+
+    private fun createRecordingFile(): File? = runCatching {
+        val directory = getExternalFilesDir(Environment.DIRECTORY_MOVIES)
+            ?: File(filesDir, Environment.DIRECTORY_MOVIES)
+        if (!directory.exists() && !directory.mkdirs()) return null
+        val name = "VID_${SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.CHINA).format(Date())}.mp4"
+        File(directory, name)
+    }.getOrNull()
+
+    private fun finishRecording(publish: Boolean) {
+        val file = recordingFile ?: return
+        recordingFile = null
+        updateRecordingUi(false)
+        rtspPlayer?.stopRecord()
+        if (publish) {
+            mediaExecutor.execute { publishRecording(file) }
         } else {
-            cam.stopRecordVideo { e ->
-                runOnUiThread {
-                    isRecording = false
-                    handler.removeCallbacks(recordTicker)
-                    btnRec.setBackgroundResource(R.drawable.bg_ctl_pill)
-                    tvRec.text = "录制"
-                    tvRec.setTextColor(0xFF9FB3A8.toInt())
-                    recTimer.visibility = View.GONE
-                    showToast(if (e == null) "录像已停止并保存" else "停止录像失败: $e")
-                }
+            file.delete()
+        }
+    }
+
+    private fun updateRecordingUi(recording: Boolean) {
+        isRecording = recording
+        handler.removeCallbacks(recordTicker)
+        if (recording) {
+            recordStartTime = System.currentTimeMillis()
+            btnRec.setBackgroundResource(R.drawable.bg_ctl_pill_rec_on)
+            tvRec.text = "停止"
+            tvRec.setTextColor(0xFFFF3B30.toInt())
+            recTimer.visibility = View.VISIBLE
+            handler.post(recordTicker)
+        } else {
+            btnRec.setBackgroundResource(R.drawable.bg_ctl_pill)
+            tvRec.text = "录制"
+            tvRec.setTextColor(0xFF9FB3A8.toInt())
+            recTimer.visibility = View.GONE
+        }
+    }
+
+    private fun publishRecording(file: File) {
+        if (!file.exists() || file.length() <= 0L) {
+            file.delete()
+            runOnUiThread { showToast("录像文件为空，未保存") }
+            return
+        }
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                publishRecordingToMediaStore(file)
+            } else {
+                publishRecordingToPublicDirectory(file)
+            }
+        }.onSuccess {
+            file.delete()
+            runOnUiThread { showToast("录像已保存：${file.name}") }
+        }.onFailure { error ->
+            Log.e(TAG, "录像发布失败: $error")
+            runOnUiThread { showToast("录像发布失败，文件保留在应用目录") }
+        }
+    }
+
+    private fun publishRecordingToMediaStore(file: File) {
+        val resolver = contentResolver
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, file.name)
+            put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_MOVIES}/$MEDIA_DIRECTORY")
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val uri = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
+            ?: throw IllegalStateException("MediaStore 插入失败")
+        runCatching {
+            val output = resolver.openOutputStream(uri)
+                ?: throw IllegalStateException("MediaStore 输出流打开失败")
+            output.use { out -> file.inputStream().use { input -> input.copyTo(out) } }
+            values.clear()
+            values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+            if (resolver.update(uri, values, null, null) <= 0) {
+                throw IllegalStateException("MediaStore 状态更新失败")
+            }
+        }.onFailure { error ->
+            resolver.delete(uri, null, null)
+            throw error
+        }
+    }
+
+    private fun publishRecordingToPublicDirectory(file: File) {
+        val directory = File(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
+            MEDIA_DIRECTORY
+        )
+        if (!directory.exists() && !directory.mkdirs()) throw IllegalStateException("影片目录创建失败")
+        val target = File(directory, file.name)
+        file.copyTo(target, overwrite = false)
+        MediaScannerConnection.scanFile(
+            applicationContext, arrayOf(target.absolutePath), arrayOf("video/mp4"), null
+        )
+    }
+
+    /** 从当前 TextureView 渲染画面取图并保存，不再向 C10Pro 发送板载拍照指令 */
+    private fun takePicture() {
+        ensureStoragePermission(ACTION_CAPTURE) { captureRtspFrame() }
+    }
+
+    private fun captureRtspFrame() {
+        if (!rtspFrameReady || !rtspTexture.isAvailable) {
+            showToast("RTSP 画面尚未就绪，无法截图")
+            return
+        }
+        val bitmap = runCatching { rtspTexture.bitmap }.getOrNull()
+        if (bitmap == null || bitmap.isRecycled) {
+            showToast("当前视频帧获取失败")
+            return
+        }
+        flashView.animate().alpha(0.85f).setDuration(80).withEndAction {
+            flashView.animate().alpha(0f).setDuration(150).start()
+        }.start()
+        val name = "IMG_${SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.CHINA).format(Date())}.jpg"
+        mediaExecutor.execute {
+            val saved = runCatching { saveBitmap(bitmap, name) }.getOrDefault(false)
+            bitmap.recycle()
+            runOnUiThread {
+                showToast(if (saved) "截图已保存：$name" else "截图保存失败")
             }
         }
     }
 
-    /** 拍照（C10Pro takePicture + 白闪动画） */
-    private fun takePicture() {
-        // 白闪动画（对应 HTML .flash）
-        flashView.animate().alpha(0.85f).setDuration(80).withEndAction {
-            flashView.animate().alpha(0f).setDuration(150).start()
-        }.start()
-        val cam = c10Pro
-        if (cam == null) {
-            showToast("相机未连接，拍照指令未送达（已模拟快门）")
+    private fun saveBitmap(bitmap: Bitmap, name: String): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val resolver = contentResolver
+            val values = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+                put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/$MEDIA_DIRECTORY")
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+            val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                ?: return false
+            return runCatching {
+                val output = resolver.openOutputStream(uri)
+                    ?: throw IllegalStateException("MediaStore 输出流打开失败")
+                output.use { if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it)) throw IllegalStateException("JPEG 编码失败") }
+                values.clear()
+                values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                if (resolver.update(uri, values, null, null) <= 0) {
+                    throw IllegalStateException("MediaStore 状态更新失败")
+                }
+            }.onFailure {
+                resolver.delete(uri, null, null)
+            }.isSuccess
+        }
+
+        val directory = File(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+            MEDIA_DIRECTORY
+        )
+        if (!directory.exists() && !directory.mkdirs()) return false
+        val target = File(directory, name)
+        target.outputStream().use { if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it)) return false }
+        MediaScannerConnection.scanFile(
+            applicationContext, arrayOf(target.absolutePath), arrayOf("image/jpeg"), null
+        )
+        return true
+    }
+
+    private fun ensureStoragePermission(actionCode: Int, action: () -> Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+        ) {
+            action()
             return
         }
-        cam.takePicture { e ->
-            runOnUiThread {
-                val name = "IMG_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.CHINA).format(Date())}.jpg"
-                showToast(if (e == null) "已拍照：$name（保存于 C10Pro 板载存储）" else "拍照失败: $e")
-            }
-        }
+        if (pendingStorageAction != 0) return
+        pendingStorageAction = actionCode
+        storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
     }
 
     // =========================================================================
@@ -907,6 +1278,9 @@ class DetectMainActivity : AppCompatActivity(),
     // =========================================================================
 
     override fun onDestroy() {
+        // 主动退出前先停止真实设备，再关闭 native muxer，最后释放播放器和数传链路
+        stopDetectionAndRobot()
+        finishRecording(true)
         super.onDestroy()
         // 取消无限动画（ObjectAnimator 走 Choreographer 通道，Handler.removeCallbacks 无法清除）
         dotAnimator?.cancel()
@@ -922,10 +1296,6 @@ class DetectMainActivity : AppCompatActivity(),
 
         // RC 按键采集
         rcMonitor.stop()
-        customButtonHelper?.let {
-            it.removeListener(buttonHandlerListener)
-            it.stop()
-        }
 
         // 信号监听
         try { KeyManager.cancelListen(signalListener) } catch (_: Exception) {}
@@ -933,13 +1303,10 @@ class DetectMainActivity : AppCompatActivity(),
         // 数传管道
         robotLink.disconnect()
 
-        // C10Pro
-        c10Pro?.let {
-            try { PayloadManager.disconnectPayload(it) } catch (_: Exception) {}
-        }
-
-        // 视频
+        // 视频与媒体保存任务
         rtspPlayer?.stop()
+        rtspPlayer = null
+        mediaExecutor.shutdown()
 
         // 遥控器
         try { RCSDKManager.disconnectRC() } catch (_: Exception) {}

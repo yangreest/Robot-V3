@@ -53,17 +53,24 @@ class RCInputMonitor {
     }
 
     companion object {
-        /**
-         * 通道名称映射（下标 = 通道号-1）：
-         * CH1-CH4 摇杆，CH5-CH8 A/B/E/F 拨杆按键，CH9-CH12 C/D/G/H 滚轮按键
-         * （H12Pro 按键定义参照 CustomRCButtonsActivity 注释；其他机型按通用序号显示）
-         */
+        /** 遥控器通道名称映射（下标 = 通道号-1），与主界面动作映射共用 */
         val CHANNEL_NAMES = arrayOf(
             "右摇杆↔", "右摇杆↕", "左摇杆↔", "左摇杆↕",
             "G-S拨杆", "定位键", "L2键", "相机",
             "B1键", "B2键", "L1键", "测量",
             "急停", "拨轮", "R1键", "R2键"
         )
+
+        // 与 CHANNEL_NAMES 下标一致（通道号 - 1）
+        const val CH_LEFT_STICK_X = 2
+        const val CH_MODE_SWITCH = 4
+        const val CH_L2 = 6
+        const val CH_CAMERA = 7
+        const val CH_L1 = 10
+        const val CH_MEASURE = 11
+        const val CH_ESTOP = 12
+        const val CH_WHEEL = 13
+        const val CH_R1 = 14
 
         fun channelName(index: Int): String =
             CHANNEL_NAMES.getOrElse(index) { "CH${index + 1}" }

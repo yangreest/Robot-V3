@@ -2,6 +2,7 @@ package com.skydroid.insulatordetect.detect
 
 import android.util.Log
 import com.skydroid.insulatordetect.String2ByteArrayUtils
+import com.skydroid.insulatordetect.protocol.WHSDControlBoardProtocol
 import com.skydroid.rcsdk.PipelineManager
 import com.skydroid.rcsdk.comm.CommListener
 import com.skydroid.rcsdk.common.Uart
@@ -11,9 +12,8 @@ import com.skydroid.rcsdk.common.pipeline.Pipeline
 /**
  * 机器人数传链路封装：基于 RCSDK 数传管道（UART0）与机器人主控通信。
  *
- * 真实协议帧格式由机器人侧提供后在 [parseFrame] 中接入；
- * 当前无真机数据时，界面检测数据由 [SimulatedSource] 驱动，
- * 机器人电量等信息使用演示默认值。
+ * 控制模块协议帧在 [parseFrame] 中接入统一解析器与心跳应答；
+ * 检测数据源当前仍由 [SimulatedSource] 驱动，机器人电量等信息使用演示默认值。
  */
 class RobotLink {
 
@@ -30,6 +30,17 @@ class RobotLink {
     var listener: Listener? = null
 
     private var pipeline: Pipeline? = null
+
+    @Volatile
+    private var linkConnected = false
+
+    val isConnected: Boolean
+        get() = linkConnected
+
+    /** 控制模块协议：统一组帧、粘包/半包解析与心跳应答 */
+    private val protocol = WHSDControlBoardProtocol().apply {
+        setSender { data -> send(data); Unit }
+    }
 
     /** 机器人电量（真实协议接入前为演示值，检测运行时由界面缓慢扣减） */
     var robotBattery = 82
@@ -51,16 +62,24 @@ class RobotLink {
         p.onCommListener = object : CommListener {
             override fun onConnectSuccess() {
                 Log.i(TAG, "数传管道 连接成功")
+                linkConnected = true
+                protocol.resetBuffer()
                 listener?.onLinkStateChanged(true)
+                protocol.startHeartbeat()
             }
 
             override fun onConnectFail(e: SkyException) {
                 Log.w(TAG, "数传管道 连接失败: $e")
+                linkConnected = false
+                protocol.stopHeartbeat()
                 listener?.onLinkStateChanged(false)
             }
 
             override fun onDisconnect() {
                 Log.i(TAG, "数传管道 断开连接")
+                linkConnected = false
+                protocol.stopHeartbeat()
+                protocol.resetBuffer()
                 listener?.onLinkStateChanged(false)
             }
 
@@ -68,27 +87,36 @@ class RobotLink {
                 parseFrame(bytes)
             }
         }
-        PipelineManager.connectPipeline(p)
+        // 先保存管道再连接，避免 SDK 同步回调连接成功时心跳帧因 pipeline 仍为空而丢失
         pipeline = p
+        PipelineManager.connectPipeline(p)
     }
 
-    /** 向机器人发送指令 */
-    fun send(data: ByteArray) {
-        pipeline?.writeData(data)
+    /** 向机器人发送指令；返回 false 表示链路不可用或 SDK 写入异常 */
+    fun send(data: ByteArray): Boolean {
+        val p = pipeline
+        if (p == null || !linkConnected) {
+            Log.w(TAG, "数传链路未连接，指令未发送")
+            return false
+        }
+        return runCatching { p.writeData(data) }.onFailure {
+            Log.e(TAG, "数传指令写入失败: $it")
+        }.isSuccess
     }
 
-    /**
-     * 协议帧解析接入点：机器人真实协议确定后在此解析
-     * 阻值/电量/探针状态等字段，并通过 [listener] 分发
-     */
+    /** 协议帧解析入口：处理粘包/半包、校验、心跳及控制模块应答 */
     private fun parseFrame(bytes: ByteArray) {
         val text = runCatching { String(bytes) }.getOrDefault("")
         val hex = String2ByteArrayUtils.bytes2Hex(bytes)
         Log.d(TAG, "收到机器人数据 长度${bytes.size} HEX:$hex TEXT:$text")
+        protocol.feed(bytes)
         listener?.onRobotData(text)
     }
 
     fun disconnect() {
+        linkConnected = false
+        protocol.stopHeartbeat()
+        protocol.resetBuffer()
         pipeline?.let { PipelineManager.disconnectPipeline(it) }
         pipeline = null
         listener = null
